@@ -40,13 +40,20 @@ export function validateReadOnlyMySQLQuery(query: string): void {
   }
 }
 
-export async function runMySQLQuery<T>(query: string, params?: unknown[], databaseName?: string): Promise<T[]> {
+export async function runMySQLQuery<T>(
+  query: string,
+  params?: unknown[],
+  databaseName?: string,
+): Promise<T[]> {
   validateReadOnlyMySQLQuery(query);
   const rows = await executeMySQLQuery<T>(query, params, databaseName);
   return filterSensitiveColumns(rows);
 }
 
-export async function analyzeMySQLQueryPlan(sql: string, databaseName?: string): Promise<QueryAnalysisResult> {
+export async function analyzeMySQLQueryPlan(
+  sql: string,
+  databaseName?: string,
+): Promise<QueryAnalysisResult> {
   const pool = getMySQLPool(databaseName);
   const connection = await pool.getConnection();
 
@@ -58,10 +65,9 @@ export async function analyzeMySQLQueryPlan(sql: string, databaseName?: string):
     // Try EXPLAIN ANALYZE for actual execution statistics (MySQL 8.0.18+)
     let explainAnalyzeResult: string | null = null;
     try {
-      const [analyzeRows] = (await connection.execute(`EXPLAIN ANALYZE ${sql}`)) as unknown as Record<
-        string,
-        unknown
-      >[];
+      const [analyzeRows] = (await connection.execute(
+        `EXPLAIN ANALYZE ${sql}`,
+      )) as unknown as Record<string, unknown>[];
       const firstAnalyzeRow = analyzeRows[0];
       if (firstAnalyzeRow) {
         explainAnalyzeResult = Object.values(firstAnalyzeRow)[0] as string;
@@ -152,7 +158,9 @@ export async function analyzeMySQLQueryPlan(sql: string, databaseName?: string):
 
     if (hasFilesort || hasTempTable) {
       if (performanceVerdict === 'EXCELLENT') performanceVerdict = 'GOOD';
-      notes.push('Query performs in-memory/on-disk temporary table creation or filesort operations.');
+      notes.push(
+        'Query performs in-memory/on-disk temporary table creation or filesort operations.',
+      );
       suggestions.push(
         'Optimise ORDER BY / GROUP BY clauses or adjust index sorting to match query ordering.',
       );

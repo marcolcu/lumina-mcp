@@ -54,7 +54,7 @@ export class GithubRepository {
       );
     }
 
-    return await response.json() as unknown[];
+    return (await response.json()) as unknown[];
   }
 
   async getIssueTimeline(
@@ -77,7 +77,7 @@ export class GithubRepository {
       );
     }
 
-    return await response.json() as unknown[];
+    return (await response.json()) as unknown[];
   }
 
   async createIssue(

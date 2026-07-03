@@ -56,14 +56,18 @@ function mapAuthor(user?: { login: string; avatar_url: string }): GitHubIssueAut
   };
 }
 
-function mapAssignees(assignees?: Array<{ login: string; avatar_url: string }>): GitHubIssueAuthor[] {
+function mapAssignees(
+  assignees?: Array<{ login: string; avatar_url: string }>,
+): GitHubIssueAuthor[] {
   return (assignees ?? []).map((a) => ({
     login: a.login,
     avatar_url: a.avatar_url,
   }));
 }
 
-function mapLabels(labels?: Array<{ name: string; color: string; description: string | null }>): GitHubIssueLabel[] {
+function mapLabels(
+  labels?: Array<{ name: string; color: string; description: string | null }>,
+): GitHubIssueLabel[] {
   return (labels ?? []).map((l) => ({
     name: l.name,
     color: l.color,
@@ -72,7 +76,12 @@ function mapLabels(labels?: Array<{ name: string; color: string; description: st
 }
 
 function mapMilestone(
-  milestone?: { title: string; state: string; due_on: string | null; description: string | null } | null,
+  milestone?: {
+    title: string;
+    state: string;
+    due_on: string | null;
+    description: string | null;
+  } | null,
 ): GitHubIssueMilestone | null {
   if (!milestone) return null;
   return {
@@ -96,11 +105,7 @@ function mapComments(rawComments: unknown[]): GitHubIssueComment[] {
 function extractLinkedPullRequests(timelineEvents: unknown[]): GitHubLinkedPullRequest[] {
   const events = timelineEvents as RawTimelineEvent[];
   const prs = events
-    .filter(
-      (e) =>
-        e.event === 'cross-referenced' &&
-        e.source?.issue?.pull_request != null,
-    )
+    .filter((e) => e.event === 'cross-referenced' && e.source?.issue?.pull_request != null)
     .map((e) => ({
       number: e.source!.issue!.number,
       title: e.source!.issue!.title,
@@ -122,7 +127,8 @@ export async function getGithubIssue(
   issueNumber: string | number,
   githubToken?: string,
 ): Promise<GitHubIssueContext> {
-  const finalToken = githubToken || process.env.GITHUB_TOKEN || process.env.GITHUB_PERSONAL_ACCESS_TOKEN;
+  const finalToken =
+    githubToken || process.env.GITHUB_TOKEN || process.env.GITHUB_PERSONAL_ACCESS_TOKEN;
 
   if (!owner || !repo || !issueNumber) {
     throw new Error('Owner, repo, and issueNumber are required to fetch a GitHub issue.');
@@ -148,10 +154,14 @@ export async function getGithubIssue(
   if (commentsResult.status === 'fulfilled') {
     comments = mapComments(commentsResult.value);
     if (comments.length === 100) {
-      warnings.push('Comments are truncated. Only the first 100 comments are fetched. Consider implementing pagination.');
+      warnings.push(
+        'Comments are truncated. Only the first 100 comments are fetched. Consider implementing pagination.',
+      );
     }
   } else {
-    warnings.push(`Failed to fetch comments: ${commentsResult.reason instanceof Error ? commentsResult.reason.message : String(commentsResult.reason)}`);
+    warnings.push(
+      `Failed to fetch comments: ${commentsResult.reason instanceof Error ? commentsResult.reason.message : String(commentsResult.reason)}`,
+    );
   }
 
   // Timeline / Linked PRs — graceful degradation
@@ -159,7 +169,9 @@ export async function getGithubIssue(
   if (timelineResult.status === 'fulfilled') {
     linked_pull_requests = extractLinkedPullRequests(timelineResult.value);
   } else {
-    warnings.push(`Failed to fetch timeline: ${timelineResult.reason instanceof Error ? timelineResult.reason.message : String(timelineResult.reason)}`);
+    warnings.push(
+      `Failed to fetch timeline: ${timelineResult.reason instanceof Error ? timelineResult.reason.message : String(timelineResult.reason)}`,
+    );
   }
 
   const context: GitHubIssueContext = {
@@ -196,7 +208,8 @@ export async function createGithubIssue(
   milestone?: number,
   githubToken?: string,
 ): Promise<unknown> {
-  const finalToken = githubToken || process.env.GITHUB_TOKEN || process.env.GITHUB_PERSONAL_ACCESS_TOKEN;
+  const finalToken =
+    githubToken || process.env.GITHUB_TOKEN || process.env.GITHUB_PERSONAL_ACCESS_TOKEN;
 
   if (!owner || !repo || !title) {
     throw new Error('Owner, repo, and title are required to create a GitHub issue.');

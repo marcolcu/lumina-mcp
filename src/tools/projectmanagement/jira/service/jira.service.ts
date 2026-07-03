@@ -15,7 +15,9 @@ export async function getJiraTicket(
   }
 
   if (!finalEmail || !finalToken) {
-    throw new Error('Jira email and apiToken are required for authentication. Provide them as arguments or set JIRA_EMAIL and JIRA_API_TOKEN.');
+    throw new Error(
+      'Jira email and apiToken are required for authentication. Provide them as arguments or set JIRA_EMAIL and JIRA_API_TOKEN.',
+    );
   }
 
   return await jiraRepository.getTicket(issueIdOrKey, finalDomain, finalEmail, finalToken);
@@ -47,7 +49,9 @@ export async function createJiraTicket(
   }
 
   if (!finalEmail || !finalToken) {
-    throw new Error('Jira email and apiToken are required for authentication. Provide them as arguments or set JIRA_EMAIL and JIRA_API_TOKEN.');
+    throw new Error(
+      'Jira email and apiToken are required for authentication. Provide them as arguments or set JIRA_EMAIL and JIRA_API_TOKEN.',
+    );
   }
 
   const ticket = await jiraRepository.createTicket(
@@ -66,7 +70,8 @@ export async function createJiraTicket(
   if (attachmentPath) {
     try {
       await jiraRepository.attachFileToTicket(
-        ((ticket as Record<string, unknown>).id || (ticket as Record<string, unknown>).key) as string,
+        ((ticket as Record<string, unknown>).id ||
+          (ticket as Record<string, unknown>).key) as string,
         attachmentPath,
         finalDomain,
         finalEmail,

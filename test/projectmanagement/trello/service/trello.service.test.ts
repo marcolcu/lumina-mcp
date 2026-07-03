@@ -12,7 +12,10 @@ vi.mock('../../../../src/tools/projectmanagement/trello/repository/trello.reposi
   },
 }));
 
-import { getTrelloCard, createTrelloCard } from '../../../../src/tools/projectmanagement/trello/service/trello.service.js';
+import {
+  getTrelloCard,
+  createTrelloCard,
+} from '../../../../src/tools/projectmanagement/trello/service/trello.service.js';
 
 describe('TrelloService', () => {
   beforeEach(() => {
@@ -49,10 +52,30 @@ describe('TrelloService', () => {
   describe('createTrelloCard', () => {
     it('should call repository.createCard when arguments are valid', async () => {
       mockCreateCard.mockResolvedValueOnce({ id: 'card10' });
-      
-      const result = await createTrelloCard('list', 'Name', 'Desc', 'top', '2026-12-31', 'lbl1', 'mem1', 'mykey', 'mytoken');
-      
-      expect(mockCreateCard).toHaveBeenCalledWith('list', 'Name', 'Desc', 'top', '2026-12-31', 'lbl1', 'mem1', 'mykey', 'mytoken');
+
+      const result = await createTrelloCard(
+        'list',
+        'Name',
+        'Desc',
+        'top',
+        '2026-12-31',
+        'lbl1',
+        'mem1',
+        'mykey',
+        'mytoken',
+      );
+
+      expect(mockCreateCard).toHaveBeenCalledWith(
+        'list',
+        'Name',
+        'Desc',
+        'top',
+        '2026-12-31',
+        'lbl1',
+        'mem1',
+        'mykey',
+        'mytoken',
+      );
       expect(result).toEqual({ id: 'card10' });
     });
 
@@ -60,17 +83,31 @@ describe('TrelloService', () => {
       process.env.TRELLO_API_KEY = 'envkey';
       process.env.TRELLO_API_TOKEN = 'envtoken';
       mockCreateCard.mockResolvedValueOnce({ id: 'card11' });
-      
+
       await createTrelloCard('list', 'Name');
-      
-      expect(mockCreateCard).toHaveBeenCalledWith('list', 'Name', undefined, undefined, undefined, undefined, undefined, 'envkey', 'envtoken');
+
+      expect(mockCreateCard).toHaveBeenCalledWith(
+        'list',
+        'Name',
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        'envkey',
+        'envtoken',
+      );
     });
 
     it('should throw error if idList or name are missing', async () => {
       process.env.TRELLO_API_KEY = 'envkey';
       process.env.TRELLO_API_TOKEN = 'envtoken';
-      await expect(createTrelloCard('', 'Name')).rejects.toThrow('Trello idList and name are required to create a card.');
-      await expect(createTrelloCard('list', '')).rejects.toThrow('Trello idList and name are required to create a card.');
+      await expect(createTrelloCard('', 'Name')).rejects.toThrow(
+        'Trello idList and name are required to create a card.',
+      );
+      await expect(createTrelloCard('list', '')).rejects.toThrow(
+        'Trello idList and name are required to create a card.',
+      );
     });
   });
 });

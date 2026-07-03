@@ -1,8 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { OrchestrationService } from '../../../src/tools/orchestration/service/orchestration.service.js';
-import {
-  SENIOR_SWE_ORCHESTRATION_PROMPT,
-} from '../../../src/tools/orchestration/prompts/index.js';
+import { SENIOR_SWE_ORCHESTRATION_PROMPT } from '../../../src/tools/orchestration/prompts/index.js';
 
 describe('Orchestration Service', () => {
   const service = new OrchestrationService();
@@ -99,14 +97,17 @@ describe('Orchestration Service', () => {
     it('should inject tokenBudget directive if provided', () => {
       const commandText = 'Implement feature X';
       const result = service.getOrchestrationPrompt(commandText, 'full-detail');
-      
+
       expect(result).toContain(commandText);
       expect(result).toContain('[SYSTEM DIRECTIVE]: You must use tokenBudget: "full-detail"');
     });
 
     it('should handle undefined command gracefully', () => {
       const result = service.getOrchestrationPrompt();
-      const expectedText = SENIOR_SWE_ORCHESTRATION_PROMPT.replace('{{context}}', 'No specific command provided.');
+      const expectedText = SENIOR_SWE_ORCHESTRATION_PROMPT.replace(
+        '{{context}}',
+        'No specific command provided.',
+      );
 
       expect(result).toBe(expectedText);
     });

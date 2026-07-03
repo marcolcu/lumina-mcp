@@ -62,6 +62,3 @@ Your task is to generate a comprehensive, production-grade End-to-End (E2E) test
 **Context / User Journey:**
 {{context}}
 `;
-
-
-

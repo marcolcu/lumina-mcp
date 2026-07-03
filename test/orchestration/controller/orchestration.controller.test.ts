@@ -1,9 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { registerOrchestrationController } from '../../../src/tools/orchestration/controller/orchestration.controller.js';
-import {
-  SENIOR_SWE_ORCHESTRATION_PROMPT,
-} from '../../../src/tools/orchestration/prompts/index.js';
+import { SENIOR_SWE_ORCHESTRATION_PROMPT } from '../../../src/tools/orchestration/prompts/index.js';
 
 interface PhaseArgs {
   phase: number;
@@ -56,7 +54,9 @@ describe('Orchestration Controller', () => {
 
     it('should return PLANNING_PROMPT for phase 1', async () => {
       const result = await getPhaseCallback({ phase: 1, includeTest: true });
-      expect(result.content[0].text).toContain('### Phase 1: Planning, Brainstorming & Test Catalog');
+      expect(result.content[0].text).toContain(
+        '### Phase 1: Planning, Brainstorming & Test Catalog',
+      );
     });
 
     it('should return TESTING_PROMPT for phase 3 when includeTest is true', async () => {
@@ -98,12 +98,20 @@ describe('Orchestration Controller', () => {
 
     // Token Budget tests
     it('should include save-tokens rules when tokenBudget is save-tokens', async () => {
-      const result = await getPhaseCallback({ phase: 1, includeTest: true, tokenBudget: 'save-tokens' });
+      const result = await getPhaseCallback({
+        phase: 1,
+        includeTest: true,
+        tokenBudget: 'save-tokens',
+      });
       expect(result.content[0].text).toContain('Save-Tokens Mode Active');
     });
 
     it('should NOT include save-tokens rules when tokenBudget is full-detail', async () => {
-      const result = await getPhaseCallback({ phase: 1, includeTest: true, tokenBudget: 'full-detail' });
+      const result = await getPhaseCallback({
+        phase: 1,
+        includeTest: true,
+        tokenBudget: 'full-detail',
+      });
       expect(result.content[0].text).not.toContain('Save-Tokens Mode Active');
     });
 
@@ -131,7 +139,9 @@ describe('Orchestration Controller', () => {
   });
 
   describe('lumina_orchestrate prompt', () => {
-    let orchestrateCallback: (args: { command?: string }) => Promise<{ messages: { role: string; content: { text: string } }[] }>;
+    let orchestrateCallback: (args: {
+      command?: string;
+    }) => Promise<{ messages: { role: string; content: { text: string } }[] }>;
 
     beforeEach(() => {
       registerOrchestrationController(mockServer as unknown as McpServer);
@@ -149,7 +159,10 @@ describe('Orchestration Controller', () => {
 
     it('should handle undefined command gracefully', async () => {
       const result = await orchestrateCallback({});
-      const expectedText = SENIOR_SWE_ORCHESTRATION_PROMPT.replace('{{context}}', 'No specific command provided.');
+      const expectedText = SENIOR_SWE_ORCHESTRATION_PROMPT.replace(
+        '{{context}}',
+        'No specific command provided.',
+      );
 
       expect(result.messages[0].content.text).toBe(expectedText);
     });
