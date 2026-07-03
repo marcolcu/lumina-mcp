@@ -1,5 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-/* eslint-disable @typescript-eslint/no-unused-vars */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { MySqlContainer, StartedMySqlContainer } from '@testcontainers/mysql';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
@@ -88,11 +86,11 @@ describe('MySQL Controller Integration Tests', () => {
       });
 
       expect(response.isError).toBeFalsy();
-      const content = (response.content as any[])[0] as { type: 'text', text: string };
+      const content = (response.content as unknown[])[0] as { type: 'text', text: string };
       const parsed = JSON.parse(content.text);
       
       // Look for the users table
-      const hasUsersTable = parsed.some((row: any) => Object.values(row)[0] === 'users');
+      const hasUsersTable = parsed.some((row: Record<string, unknown>) => Object.values(row)[0] === 'users');
       expect(hasUsersTable).toBe(true);
     });
 
@@ -106,7 +104,7 @@ describe('MySQL Controller Integration Tests', () => {
       });
 
       expect(response.isError).toBeFalsy();
-      const content = (response.content as any[])[0] as { type: 'text', text: string };
+      const content = (response.content as unknown[])[0] as { type: 'text', text: string };
       const rows = JSON.parse(content.text);
 
       expect(rows).toHaveLength(2);
@@ -124,14 +122,14 @@ describe('MySQL Controller Integration Tests', () => {
       });
 
       if (response.isError) {
-        console.error('inspect_mysql_table error:', (response.content as any[])[0]);
+        console.error('inspect_mysql_table error:', (response.content as unknown[])[0]);
       }
       expect(response.isError).toBeFalsy();
-      const content = (response.content as any[])[0] as { type: 'text', text: string };
+      const content = (response.content as unknown[])[0] as { type: 'text', text: string };
       const rows = JSON.parse(content.text);
 
       expect(rows.length).toBeGreaterThan(0);
-      const fields = rows.map((r: any) => r.Field);
+      const fields = rows.map((r: Record<string, unknown>) => r.Field);
       expect(fields).toContain('id');
       expect(fields).toContain('username');
       expect(fields).toContain('email');
@@ -147,7 +145,7 @@ describe('MySQL Controller Integration Tests', () => {
       });
 
       expect(response.isError).toBeFalsy();
-      const content = (response.content as any[])[0] as { type: 'text', text: string };
+      const content = (response.content as unknown[])[0] as { type: 'text', text: string };
       const result = JSON.parse(content.text);
 
       // Verify structure of the response
@@ -175,7 +173,7 @@ describe('MySQL Controller Integration Tests', () => {
       });
 
       expect(response.isError).toBe(true);
-      const content = (response.content as any[])[0] as { type: 'text', text: string };
+      const content = (response.content as unknown[])[0] as { type: 'text', text: string };
       expect(content.text).toContain('Database Error:');
       expect(content.text).toContain('Database Error: Only SELECT or read-only queries are allowed.');
     });
@@ -190,7 +188,7 @@ describe('MySQL Controller Integration Tests', () => {
       });
 
       expect(response.isError).toBe(true);
-      const content = (response.content as any[])[0] as { type: 'text', text: string };
+      const content = (response.content as unknown[])[0] as { type: 'text', text: string };
       expect(content.text).toContain('Database Error: Only SELECT or read-only queries are allowed.');
     });
 
@@ -204,7 +202,7 @@ describe('MySQL Controller Integration Tests', () => {
       });
 
       expect(response.isError).toBe(true);
-      const content = (response.content as any[])[0] as { type: 'text', text: string };
+      const content = (response.content as unknown[])[0] as { type: 'text', text: string };
       // Database specific error
       expect(content.text).toContain('Table \'lumina_test_db.nonexistent_table\' doesn\'t exist');
     });
@@ -219,7 +217,7 @@ describe('MySQL Controller Integration Tests', () => {
       });
 
       expect(response.isError).toBe(true);
-      const content = (response.content as any[])[0] as { type: 'text', text: string };
+      const content = (response.content as unknown[])[0] as { type: 'text', text: string };
       expect(content.text).toContain('Only SELECT or WITH queries can be analyzed using EXPLAIN.');
     });
   });

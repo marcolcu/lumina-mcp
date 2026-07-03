@@ -1,5 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-/* eslint-disable @typescript-eslint/no-unused-vars */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { PostgreSqlContainer, StartedPostgreSqlContainer } from '@testcontainers/postgresql';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
@@ -76,7 +74,7 @@ describe('PostgreSQL Controller Integration Tests', () => {
     }
     try {
       await getPostgresPool(dbName).end();
-    } catch (e) {
+    } catch {
       // ignore
     }
     if (pgContainer) {
@@ -92,11 +90,11 @@ describe('PostgreSQL Controller Integration Tests', () => {
       });
 
       expect(response.isError).toBeFalsy();
-      const content = (response.content as any[])[0] as { type: 'text'; text: string };
+      const content = (response.content as unknown[])[0] as { type: 'text'; text: string };
       const parsed = JSON.parse(content.text);
       
       // Look for the users table
-      const hasUsersTable = parsed.some((row: any) => Object.values(row)[0] === 'users');
+      const hasUsersTable = parsed.some((row: Record<string, unknown>) => Object.values(row)[0] === 'users');
       expect(hasUsersTable).toBe(true);
     });
 
@@ -110,7 +108,7 @@ describe('PostgreSQL Controller Integration Tests', () => {
       });
 
       expect(response.isError).toBeFalsy();
-      const content = (response.content as any[])[0] as { type: 'text'; text: string };
+      const content = (response.content as unknown[])[0] as { type: 'text'; text: string };
       const rows = JSON.parse(content.text);
 
       expect(rows).toHaveLength(2);
@@ -128,14 +126,14 @@ describe('PostgreSQL Controller Integration Tests', () => {
       });
 
       if (response.isError) {
-        console.error('inspect_postgresql_table error:', (response.content as any[])[0]);
+        console.error('inspect_postgresql_table error:', (response.content as unknown[])[0]);
       }
       expect(response.isError).toBeFalsy();
-      const content = (response.content as any[])[0] as { type: 'text'; text: string };
+      const content = (response.content as unknown[])[0] as { type: 'text'; text: string };
       const rows = JSON.parse(content.text);
 
       expect(rows.length).toBeGreaterThan(0);
-      const fields = rows.map((r: any) => r.column_name);
+      const fields = rows.map((r: Record<string, unknown>) => r.column_name);
       expect(fields).toContain('id');
       expect(fields).toContain('username');
       expect(fields).toContain('email');
@@ -151,7 +149,7 @@ describe('PostgreSQL Controller Integration Tests', () => {
       });
 
       expect(response.isError).toBeFalsy();
-      const content = (response.content as any[])[0] as { type: 'text'; text: string };
+      const content = (response.content as unknown[])[0] as { type: 'text'; text: string };
       const result = JSON.parse(content.text);
 
       // Verify structure of the response
@@ -174,7 +172,7 @@ describe('PostgreSQL Controller Integration Tests', () => {
 
   describe('Negative Path', () => {
     it('execute_postgres_query should fail on non-SELECT query', async () => {
-      const response = await client.callTool({
+      await client.callTool({
         name: 'execute_postgres_query',
         arguments: {
           query: 'DROP TABLE users',
@@ -198,7 +196,7 @@ describe('PostgreSQL Controller Integration Tests', () => {
       });
 
       expect(response.isError).toBe(true);
-      const content = (response.content as any[])[0] as { type: 'text'; text: string };
+      const content = (response.content as unknown[])[0] as { type: 'text'; text: string };
       expect(content.text).toContain('Database Error:');
     });
 
@@ -213,7 +211,7 @@ describe('PostgreSQL Controller Integration Tests', () => {
 
       // it returns empty array for nonexistent tables because information_schema returns no rows
       expect(response.isError).toBeFalsy();
-      const content = (response.content as any[])[0] as { type: 'text'; text: string };
+      const content = (response.content as unknown[])[0] as { type: 'text'; text: string };
       const rows = JSON.parse(content.text);
       expect(rows).toHaveLength(0);
     });
@@ -228,7 +226,7 @@ describe('PostgreSQL Controller Integration Tests', () => {
       });
 
       expect(response.isError).toBe(true);
-      const content = (response.content as any[])[0] as { type: 'text'; text: string };
+      const content = (response.content as unknown[])[0] as { type: 'text'; text: string };
       expect(content.text).toContain('Only SELECT or WITH queries can be analyzed using EXPLAIN.');
     });
   });
