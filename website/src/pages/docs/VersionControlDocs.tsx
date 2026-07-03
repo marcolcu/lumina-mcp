@@ -32,6 +32,16 @@ export function VersionControlDocs() {
               <td className="p-4"><Trans i18nKey="docs.versionControl.table.descToken" components={[<code key="0" />]} /></td>
               <td className="p-4"><code className="text-xs bg-muted p-1 rounded font-mono">github_pat_11A2B3C4D...</code></td>
             </tr>
+            <tr>
+              <td className="p-4 font-mono text-accent">GITEA_TOKEN</td>
+              <td className="p-4"><Trans i18nKey="docs.versionControl.table.descGiteaToken" defaults="Personal Access Token for your Gitea server." /></td>
+              <td className="p-4"><code className="text-xs bg-muted p-1 rounded font-mono">1a2b3c4d5e...</code></td>
+            </tr>
+            <tr>
+              <td className="p-4 font-mono text-accent">GITEA_URL</td>
+              <td className="p-4"><Trans i18nKey="docs.versionControl.table.descGiteaUrl" defaults="The base URL of your Gitea instance." /></td>
+              <td className="p-4"><code className="text-xs bg-muted p-1 rounded font-mono">https://gitea.example.com</code></td>
+            </tr>
           </tbody>
         </table>
       </div>
@@ -119,6 +129,50 @@ export function VersionControlDocs() {
           </div>
           <p className="text-xs md:text-sm text-muted-foreground m-0">
             {t('docs.versionControl.tools.t7Desc')}
+          </p>
+        </div>
+
+        {/* Tool 8 */}
+        <div className="p-5 border border-border rounded-xl bg-card">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2">
+            <h3 className="font-mono text-base md:text-lg text-accent m-0">create_gitea_pr</h3>
+            <span className="text-[10px] uppercase tracking-wider font-extrabold px-2 py-0.5 rounded bg-muted border border-border self-start sm:self-auto">{t('docs.versionControl.tools.t8Badge', 'GITEA')}</span>
+          </div>
+          <p className="text-xs md:text-sm text-muted-foreground m-0">
+            {t('docs.versionControl.tools.t8Desc', 'Opens a new Gitea Pull Request with a value-first markdown description outlining the modifications.')}
+          </p>
+        </div>
+
+        {/* Tool 9 */}
+        <div className="p-5 border border-border rounded-xl bg-card">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2">
+            <h3 className="font-mono text-base md:text-lg text-accent m-0">review_gitea_pr</h3>
+            <span className="text-[10px] uppercase tracking-wider font-extrabold px-2 py-0.5 rounded bg-muted border border-border self-start sm:self-auto">{t('docs.versionControl.tools.t9Badge', 'GITEA')}</span>
+          </div>
+          <p className="text-xs md:text-sm text-muted-foreground m-0">
+            {t('docs.versionControl.tools.t9Desc', 'Submits an AI-based code review to a Gitea Pull Request (approve, request changes, or comment).')}
+          </p>
+        </div>
+
+        {/* Tool 10 */}
+        <div className="p-5 border border-border rounded-xl bg-card">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2">
+            <h3 className="font-mono text-base md:text-lg text-accent m-0">fix_gitea_pr_review</h3>
+            <span className="text-[10px] uppercase tracking-wider font-extrabold px-2 py-0.5 rounded bg-muted border border-border self-start sm:self-auto">{t('docs.versionControl.tools.t10Badge', 'GITEA')}</span>
+          </div>
+          <p className="text-xs md:text-sm text-muted-foreground m-0">
+            {t('docs.versionControl.tools.t10Desc', 'Automatically fixes code review feedback on a Gitea Pull Request.')}
+          </p>
+        </div>
+
+        {/* Tool 11 */}
+        <div className="p-5 border border-border rounded-xl bg-card">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2">
+            <h3 className="font-mono text-base md:text-lg text-accent m-0">get_gitea_pr_diff</h3>
+            <span className="text-[10px] uppercase tracking-wider font-extrabold px-2 py-0.5 rounded bg-muted border border-border self-start sm:self-auto">{t('docs.versionControl.tools.t11Badge', 'GITEA')}</span>
+          </div>
+          <p className="text-xs md:text-sm text-muted-foreground m-0">
+            {t('docs.versionControl.tools.t11Desc', 'Downloads a clean, unified git diff representation of any open Gitea pull request for automated review.')}
           </p>
         </div>
 

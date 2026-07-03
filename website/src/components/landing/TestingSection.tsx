@@ -38,6 +38,11 @@ export function TestingSection() {
       name: "/create-e2e-test",
       desc: t('testing.prompts.createE2ETest'),
       cmd: '/create-e2e-test "Write e2e tests for the user registration flow."'
+    },
+    {
+      name: "/create-integration-test",
+      desc: t('testing.prompts.createIntegrationTest', 'Generate integration tests leveraging real environments and Testcontainers.'),
+      cmd: '/create-integration-test "Create integration tests for the PostgreSQL controller using Testcontainers."'
     }
   ]
 

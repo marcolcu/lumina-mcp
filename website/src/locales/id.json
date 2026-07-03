@@ -10,7 +10,7 @@
     "github": "GitHub"
   },
   "hero": {
-    "versionBadge": "AI MCP Server & Workflows v1.3.1",
+    "versionBadge": "AI MCP Server & Workflows v1.3.2",
     "heading1": "Berdayakan AI Assistant Anda dengan",
     "heading2": "Superpower Developer",
     "subtitle": "Berikan agen AI Anda akses langsung dan aman ke environment development. Eksekusi query database, otomatisasi workflow Git, sinkronkan tiket Jira, dan jalankan task programming kompleks dengan mudah.",
@@ -49,7 +49,7 @@
   },
   "git": {
     "title": "Otomasi Git & PR",
-    "subtitle": "Otomatisasi workflow Git commit dan pull request (PR). Jalankan proses code review komprehensif dan selesaikan diskusi thread secara otonom dan terstruktur.",
+    "subtitle": "Otomatisasi proses commit Git dan pull request. Lakukan code review mendalam dan selesaikan diskusi thread secara otomatis. (Saat ini mendukung GitHub dan Gitea).",
     "recursiveResolution": "Resolusi Thread Rekursif",
     "recursiveResolutionDesc": "Lumina secara cerdas menangani feedback dari komentar PR GitHub. Agen AI akan membaca komentar, melacak file target, memperbaiki kode, melakukan push commit, dan membalas komentar untuk menyelesaikan (resolve) thread diskusi.",
     "docs": "Dokumentasi",
@@ -326,9 +326,9 @@
     "versionControl": {
       "badge": "Documentation",
       "title": "Version Control",
-      "subtitle": "Otomatiskan pull request GitHub, commit konvensional, dan resolusi komentar secara langsung melalui sistem Version Control Lumina MCP.",
+      "subtitle": "Otomatisasi pull request GitHub dan Gitea, conventional commits, serta resolusi komentar langsung melalui sistem Version Control Lumina MCP.",
       "setupTitle": "Setup & Token Configuration",
-      "setupDesc": "Untuk berinteraksi dengan repositori GitHub Anda, konfigurasikan environment variable berikut:",
+      "setupDesc": "Untuk berinteraksi dengan repositori GitHub atau Gitea Anda, konfigurasikan environment variables berikut:",
       "table": {
         "variable": "Variable",
         "description": "Deskripsi",

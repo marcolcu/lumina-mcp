@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.3.2] — 2026-07-03
+
+### Added
+- **Gitea Integration**: Added full version control support for Gitea, including tools to create PRs (`create_gitea_pr`), fetch diffs (`get_gitea_pr_diff`), review code (`review_gitea_pr`), and fix PR reviews (`fix_gitea_pr_review`).
+- **Integration Tests**: Implemented comprehensive, production-grade integration tests using Vitest and Testcontainers for PostgreSQL and MySQL controllers to ensure reliable DB connections.
+
+### Fixed
+- **Security & CI/CD**: Resolved DOM-based XSS vulnerabilities in the website (`DocsLayout.tsx`) and updated GitHub Actions workflows to enforce least-privilege permissions.
+
 ## [1.3.1] — 2026-06-28
 
 ### Added

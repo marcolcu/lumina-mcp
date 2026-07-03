@@ -131,6 +131,8 @@ const CONFIG_JSON = `{
         "MYSQL_URL": "mysql://username:password@localhost:3306/database_name",
         "POSTGRES_URL": "postgresql://username:password@localhost:5432/database_name",
         "GITHUB_TOKEN": "ghp_YourGitHubPersonalAccessToken",
+        "GITEA_TOKEN": "YourGiteaPersonalAccessToken",
+        "GITEA_URL": "https://gitea.example.com",
         "TRELLO_API_KEY": "YourTrelloApiKey",
         "TRELLO_API_TOKEN": "YourTrelloApiToken",
         "OPENPROJECT_DOMAIN": "https://your-domain.openproject.com",
@@ -151,6 +153,8 @@ args = ["-y", "lumina-mcp"]
 MYSQL_URL = "mysql://username:password@localhost:3306/database_name"
 POSTGRES_URL = "postgresql://username:password@localhost:5432/database_name"
 GITHUB_TOKEN = "ghp_YourGitHubPersonalAccessToken"
+GITEA_TOKEN = "YourGiteaPersonalAccessToken"
+GITEA_URL = "https://gitea.example.com"
 TRELLO_API_KEY = "YourTrelloApiKey"
 TRELLO_API_TOKEN = "YourTrelloApiToken"
 OPENPROJECT_DOMAIN = "https://your-domain.openproject.com"
@@ -185,7 +189,7 @@ function SyntaxHighlightedJSON({ code }: { code: string }) {
               const val = valMatch[1]
               const comma = valMatch[2] || ""
               
-              const isEnvValue = ["MYSQL_URL", "POSTGRES_URL", "GITHUB_TOKEN", "TRELLO_API_KEY", "TRELLO_API_TOKEN", "OPENPROJECT_DOMAIN", "OPENPROJECT_API_KEY", "JIRA_EMAIL", "JIRA_API_TOKEN", "JIRA_DOMAIN"].includes(key)
+              const isEnvValue = ["MYSQL_URL", "POSTGRES_URL", "GITHUB_TOKEN", "GITEA_TOKEN", "GITEA_URL", "TRELLO_API_KEY", "TRELLO_API_TOKEN", "OPENPROJECT_DOMAIN", "OPENPROJECT_API_KEY", "JIRA_EMAIL", "JIRA_API_TOKEN", "JIRA_DOMAIN"].includes(key)
               const valueColor = isEnvValue ? "text-amber-500 dark:text-amber-400 font-medium" : "text-emerald-500 dark:text-emerald-400"
               
               renderedLine.push(<span key="val" className={valueColor}> "{val}"</span>)
