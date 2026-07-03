@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { MySqlContainer, StartedMySqlContainer } from '@testcontainers/mysql';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
