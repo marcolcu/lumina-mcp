@@ -68,9 +68,13 @@ describe('MySQL Controller Integration Tests', () => {
     if (client) await client.close();
     if (server) await server.close();
 
-    const pool = getMySQLPool(dbName);
-    if (pool) {
-      await pool.end();
+    try {
+      const pool = getMySQLPool(dbName);
+      if (pool) {
+        await pool.end();
+      }
+    } catch (e) {
+      console.warn('Failed to close MySQL pool during teardown', e);
     }
 
     if (mysqlContainer) {
@@ -87,7 +91,7 @@ describe('MySQL Controller Integration Tests', () => {
 
       expect(response.isError).toBeFalsy();
       const content = (response.content as unknown[])[0] as { type: 'text', text: string };
-      const parsed = JSON.parse(content.text);
+      const parsed = JSON.parse(content.text) as Record<string, unknown>[];
       
       // Look for the users table
       const hasUsersTable = parsed.some((row: Record<string, unknown>) => Object.values(row)[0] === 'users');
@@ -105,7 +109,7 @@ describe('MySQL Controller Integration Tests', () => {
 
       expect(response.isError).toBeFalsy();
       const content = (response.content as unknown[])[0] as { type: 'text', text: string };
-      const rows = JSON.parse(content.text);
+      const rows = JSON.parse(content.text) as Record<string, unknown>[];
 
       expect(rows).toHaveLength(2);
       expect(rows[0].username).toBe('alice');
@@ -126,7 +130,7 @@ describe('MySQL Controller Integration Tests', () => {
       }
       expect(response.isError).toBeFalsy();
       const content = (response.content as unknown[])[0] as { type: 'text', text: string };
-      const rows = JSON.parse(content.text);
+      const rows = JSON.parse(content.text) as Record<string, unknown>[];
 
       expect(rows.length).toBeGreaterThan(0);
       const fields = rows.map((r: Record<string, unknown>) => r.Field);
@@ -146,7 +150,15 @@ describe('MySQL Controller Integration Tests', () => {
 
       expect(response.isError).toBeFalsy();
       const content = (response.content as unknown[])[0] as { type: 'text', text: string };
-      const result = JSON.parse(content.text);
+      const result = JSON.parse(content.text) as {
+        explainRows: Record<string, unknown>[];
+        tableAnalysis: Record<string, unknown>;
+        seniorAudit: {
+          performanceVerdict: string;
+          securityVerdict: string;
+          notes: string[];
+        };
+      };
 
       // Verify structure of the response
       expect(result).toHaveProperty('explainRows');

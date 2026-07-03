@@ -91,7 +91,7 @@ describe('PostgreSQL Controller Integration Tests', () => {
 
       expect(response.isError).toBeFalsy();
       const content = (response.content as unknown[])[0] as { type: 'text'; text: string };
-      const parsed = JSON.parse(content.text);
+      const parsed = JSON.parse(content.text) as Record<string, unknown>[];
       
       // Look for the users table
       const hasUsersTable = parsed.some((row: Record<string, unknown>) => Object.values(row)[0] === 'users');
@@ -109,7 +109,7 @@ describe('PostgreSQL Controller Integration Tests', () => {
 
       expect(response.isError).toBeFalsy();
       const content = (response.content as unknown[])[0] as { type: 'text'; text: string };
-      const rows = JSON.parse(content.text);
+      const rows = JSON.parse(content.text) as Record<string, unknown>[];
 
       expect(rows).toHaveLength(2);
       expect(rows[0].username).toBe('alice');
@@ -130,7 +130,7 @@ describe('PostgreSQL Controller Integration Tests', () => {
       }
       expect(response.isError).toBeFalsy();
       const content = (response.content as unknown[])[0] as { type: 'text'; text: string };
-      const rows = JSON.parse(content.text);
+      const rows = JSON.parse(content.text) as Record<string, unknown>[];
 
       expect(rows.length).toBeGreaterThan(0);
       const fields = rows.map((r: Record<string, unknown>) => r.column_name);
@@ -150,7 +150,7 @@ describe('PostgreSQL Controller Integration Tests', () => {
 
       expect(response.isError).toBeFalsy();
       const content = (response.content as unknown[])[0] as { type: 'text'; text: string };
-      const result = JSON.parse(content.text);
+      const result = JSON.parse(content.text) as { explainPlan: Record<string, unknown>[]; seniorAudit: Record<string, unknown> };
 
       // Verify structure of the response
       expect(result).toHaveProperty('explainPlan');
@@ -212,7 +212,7 @@ describe('PostgreSQL Controller Integration Tests', () => {
       // it returns empty array for nonexistent tables because information_schema returns no rows
       expect(response.isError).toBeFalsy();
       const content = (response.content as unknown[])[0] as { type: 'text'; text: string };
-      const rows = JSON.parse(content.text);
+      const rows = JSON.parse(content.text) as Record<string, unknown>[];
       expect(rows).toHaveLength(0);
     });
 
