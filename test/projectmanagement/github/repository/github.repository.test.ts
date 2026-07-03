@@ -17,7 +17,7 @@ describe('GithubRepository', () => {
     } as Response);
 
     const result = await repository.getIssue('myowner', 'myrepo', 1);
-    
+
     expect(global.fetch).toHaveBeenCalledWith(
       'https://api.github.com/repos/myowner/myrepo/issues/1',
       expect.objectContaining({
@@ -38,7 +38,7 @@ describe('GithubRepository', () => {
     } as Response);
 
     const result = await repository.getIssue('myowner', 'myrepo', 1, 'mytoken');
-    
+
     expect(global.fetch).toHaveBeenCalledWith(
       'https://api.github.com/repos/myowner/myrepo/issues/1',
       expect.objectContaining({
@@ -78,7 +78,7 @@ describe('GithubRepository', () => {
       ['bug'],
       ['assignee1'],
       1,
-      'mytoken'
+      'mytoken',
     );
 
     expect(global.fetch).toHaveBeenCalledWith(
@@ -110,7 +110,18 @@ describe('GithubRepository', () => {
     } as Response);
 
     await expect(
-      repository.createIssue('myowner', 'myrepo', 'Title', undefined, undefined, undefined, undefined, 'token')
-    ).rejects.toThrow('Failed to create GitHub issue in myowner/myrepo: Unprocessable Entity - Validation failed');
+      repository.createIssue(
+        'myowner',
+        'myrepo',
+        'Title',
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        'token',
+      ),
+    ).rejects.toThrow(
+      'Failed to create GitHub issue in myowner/myrepo: Unprocessable Entity - Validation failed',
+    );
   });
 });

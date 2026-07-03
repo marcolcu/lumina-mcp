@@ -10,7 +10,7 @@
     "github": "GitHub"
   },
   "hero": {
-    "versionBadge": "AI MCP Server & Workflows v1.3.1",
+    "versionBadge": "AI MCP Server & Workflows v1.3.2",
     "heading1": "Give Your AI Assistant",
     "heading2": "Real Developer Superpowers",
     "subtitle": "Provide your AI agents with direct access to your developer environment. Execute database queries, streamline Git workflows, track Jira boards, and orchestrate complex tasks safely.",
@@ -49,7 +49,7 @@
   },
   "git": {
     "title": "Git & PR Automation",
-    "subtitle": "Streamline Git commits and pull request workflows. Conduct thorough code reviews and resolve thread discussions recursively.",
+    "subtitle": "Streamline Git commits and pull request workflows. Conduct thorough code reviews and resolve thread discussions recursively. (Currently supports GitHub and Gitea).",
     "recursiveResolution": "Recursive Thread Resolution",
     "recursiveResolutionDesc": "Lumina handles GitHub PR comments loops. The agent reviews comments, locates target files, edits code to resolve review requests, pushes commits, and replies to close the thread.",
     "docs": "Docs",
@@ -326,9 +326,9 @@
     "versionControl": {
       "badge": "Documentation",
       "title": "Version Control",
-      "subtitle": "Automate GitHub pull requests, conventional commits, and comment resolutions directly through Lumina MCP's Version Control system.",
+      "subtitle": "Automate GitHub and Gitea pull requests, conventional commits, and comment resolutions directly through Lumina MCP's Version Control system.",
       "setupTitle": "Setup & Token Configuration",
-      "setupDesc": "To interact with your GitHub repositories, configure the following environment variable:",
+      "setupDesc": "To interact with your GitHub or Gitea repositories, configure the following environment variables:",
       "table": {
         "variable": "Variable",
         "description": "Description",

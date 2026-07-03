@@ -5,7 +5,7 @@ export class OpenProjectRepository {
   async getWorkPackage(workPackageId: string, domain: string, apiKey: string): Promise<unknown> {
     const cleanDomain = domain.replace(/^https?:\/\//, '').replace(/\/$/, '');
     const url = `https://${cleanDomain}/api/v3/work_packages/${workPackageId}`;
-    
+
     // OpenProject uses Basic Auth where username is 'apikey'
     const authHeader = 'Basic ' + Buffer.from(`apikey:${apiKey}`).toString('base64');
 
@@ -48,20 +48,20 @@ export class OpenProjectRepository {
     } = {
       subject,
       _links: {
-        type: { href: `/api/v3/types/${type}` }
-      }
+        type: { href: `/api/v3/types/${type}` },
+      },
     };
 
     if (description) {
       body.description = { format: 'markdown', raw: description };
     }
-    
+
     if (priority) {
       body._links.priority = { href: `/api/v3/priorities/${priority}` };
     }
 
     if (assignee) {
-      // Assignee is often passed as just the user ID or the full href. 
+      // Assignee is often passed as just the user ID or the full href.
       // Handling simple ID to href transformation if numeric.
       const assigneeHref = /^\d+$/.test(assignee) ? `/api/v3/users/${assignee}` : assignee;
       body._links.assignee = { href: assigneeHref };
@@ -99,7 +99,7 @@ export class OpenProjectRepository {
 
     const fileBuffer = await fs.readFile(filePath);
     const fileName = path.basename(filePath);
-    
+
     const formData = new FormData();
     formData.append('metadata', JSON.stringify({ fileName }));
     const blob = new Blob([fileBuffer]);

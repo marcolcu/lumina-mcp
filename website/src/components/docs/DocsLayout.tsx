@@ -96,7 +96,9 @@ export function DocsLayout() {
       const headings = Array.from(document.querySelectorAll("main h2, main h3"))
       const newToc = headings.map(heading => {
         if (!heading.id) {
-          heading.id = heading.textContent?.toLowerCase().replace(/\s+/g, "-") || ""
+          // Sanitize textContent to prevent DOM XSS vulnerabilities (CWE-79 / CWE-116)
+          const safeText = heading.textContent?.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || ""
+          heading.id = safeText
         }
         return {
           id: heading.id,

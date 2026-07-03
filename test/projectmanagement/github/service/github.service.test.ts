@@ -1,11 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const { mockGetIssue, mockGetIssueComments, mockGetIssueTimeline, mockCreateIssue } = vi.hoisted(() => ({
-  mockGetIssue: vi.fn(),
-  mockGetIssueComments: vi.fn(),
-  mockGetIssueTimeline: vi.fn(),
-  mockCreateIssue: vi.fn(),
-}));
+const { mockGetIssue, mockGetIssueComments, mockGetIssueTimeline, mockCreateIssue } = vi.hoisted(
+  () => ({
+    mockGetIssue: vi.fn(),
+    mockGetIssueComments: vi.fn(),
+    mockGetIssueTimeline: vi.fn(),
+    mockCreateIssue: vi.fn(),
+  }),
+);
 
 vi.mock('../../../../src/tools/projectmanagement/github/repository/github.repository.js', () => ({
   githubRepository: {
@@ -16,7 +18,10 @@ vi.mock('../../../../src/tools/projectmanagement/github/repository/github.reposi
   },
 }));
 
-import { getGithubIssue, createGithubIssue } from '../../../../src/tools/projectmanagement/github/service/github.service.js';
+import {
+  getGithubIssue,
+  createGithubIssue,
+} from '../../../../src/tools/projectmanagement/github/service/github.service.js';
 
 describe('GithubService', () => {
   beforeEach(() => {
@@ -80,26 +85,59 @@ describe('GithubService', () => {
   describe('createGithubIssue', () => {
     it('should call repository.createIssue when arguments are valid', async () => {
       mockCreateIssue.mockResolvedValueOnce({ id: 10 });
-      
-      const result = await createGithubIssue('myowner', 'myrepo', 'My Title', 'My Body', ['bug'], ['me'], 1, 'mytoken');
-      
-      expect(mockCreateIssue).toHaveBeenCalledWith('myowner', 'myrepo', 'My Title', 'My Body', ['bug'], ['me'], 1, 'mytoken');
+
+      const result = await createGithubIssue(
+        'myowner',
+        'myrepo',
+        'My Title',
+        'My Body',
+        ['bug'],
+        ['me'],
+        1,
+        'mytoken',
+      );
+
+      expect(mockCreateIssue).toHaveBeenCalledWith(
+        'myowner',
+        'myrepo',
+        'My Title',
+        'My Body',
+        ['bug'],
+        ['me'],
+        1,
+        'mytoken',
+      );
       expect(result).toEqual({ id: 10 });
     });
 
     it('should fallback to env variables if token is omitted', async () => {
       process.env.GITHUB_TOKEN = 'envtoken';
       mockCreateIssue.mockResolvedValueOnce({ id: 11 });
-      
+
       await createGithubIssue('myowner', 'myrepo', 'My Title');
-      
-      expect(mockCreateIssue).toHaveBeenCalledWith('myowner', 'myrepo', 'My Title', undefined, undefined, undefined, undefined, 'envtoken');
+
+      expect(mockCreateIssue).toHaveBeenCalledWith(
+        'myowner',
+        'myrepo',
+        'My Title',
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        'envtoken',
+      );
     });
 
     it('should throw error if owner, repo, or title are missing', async () => {
-      await expect(createGithubIssue('', 'repo', 'title')).rejects.toThrow('Owner, repo, and title are required to create a GitHub issue.');
-      await expect(createGithubIssue('owner', '', 'title')).rejects.toThrow('Owner, repo, and title are required to create a GitHub issue.');
-      await expect(createGithubIssue('owner', 'repo', '')).rejects.toThrow('Owner, repo, and title are required to create a GitHub issue.');
+      await expect(createGithubIssue('', 'repo', 'title')).rejects.toThrow(
+        'Owner, repo, and title are required to create a GitHub issue.',
+      );
+      await expect(createGithubIssue('owner', '', 'title')).rejects.toThrow(
+        'Owner, repo, and title are required to create a GitHub issue.',
+      );
+      await expect(createGithubIssue('owner', 'repo', '')).rejects.toThrow(
+        'Owner, repo, and title are required to create a GitHub issue.',
+      );
     });
   });
 });

@@ -36,7 +36,7 @@ describe('GitHub Repository', () => {
             Accept: 'application/vnd.github.v3+json',
             'User-Agent': 'MCP-Github-Server',
           }),
-        })
+        }),
       );
       expect(result).toEqual({ data: 'test-data' });
     });
@@ -59,7 +59,7 @@ describe('GitHub Repository', () => {
       });
 
       await expect(githubRepository.fetchFromGithub('/endpoint')).rejects.toThrow(
-        'GitHub API Error (404): {"message":"Not Found"}'
+        'GitHub API Error (404): {"message":"Not Found"}',
       );
     });
   });
@@ -72,14 +72,20 @@ describe('GitHub Repository', () => {
         json: async () => ({ html_url: 'https://github.com/pr/1', state: 'open' }),
       });
 
-      const result = await githubRepository.createPullRequest('owner/repo', 'title', 'head', 'base', 'body');
+      const result = await githubRepository.createPullRequest(
+        'owner/repo',
+        'title',
+        'head',
+        'base',
+        'body',
+      );
 
       expect(mockFetch).toHaveBeenCalledWith(
         'https://api.github.com' + GITHUB_ENDPOINTS.CREATE_PR('owner/repo'),
         expect.objectContaining({
           method: 'POST',
           body: JSON.stringify({ title: 'title', head: 'head', base: 'base', body: 'body' }),
-        })
+        }),
       );
       expect(result).toEqual({ html_url: 'https://github.com/pr/1', state: 'open' });
     });
@@ -91,14 +97,20 @@ describe('GitHub Repository', () => {
         json: async () => ({ state: 'APPROVED' }),
       });
 
-      const result = await githubRepository.createCodeReview('owner/repo', 42, 'APPROVE', 'body', []);
+      const result = await githubRepository.createCodeReview(
+        'owner/repo',
+        42,
+        'APPROVE',
+        'body',
+        [],
+      );
 
       expect(mockFetch).toHaveBeenCalledWith(
         'https://api.github.com' + GITHUB_ENDPOINTS.PR_REVIEWS('owner/repo', 42),
         expect.objectContaining({
           method: 'POST',
           body: JSON.stringify({ event: 'APPROVE', body: 'body', comments: [] }),
-        })
+        }),
       );
       expect(result).toEqual({ state: 'APPROVED' });
     });

@@ -9,7 +9,9 @@ export async function getTrelloCard(
   const finalToken = apiToken || process.env.TRELLO_API_TOKEN;
 
   if (!finalKey || !finalToken) {
-    throw new Error('Trello apiKey and apiToken are required. Provide them as arguments or set TRELLO_API_KEY and TRELLO_API_TOKEN.');
+    throw new Error(
+      'Trello apiKey and apiToken are required. Provide them as arguments or set TRELLO_API_KEY and TRELLO_API_TOKEN.',
+    );
   }
 
   return await trelloRepository.getCard(cardId, finalKey, finalToken);
@@ -34,7 +36,9 @@ export async function createTrelloCard(
   }
 
   if (!finalKey || !finalToken) {
-    throw new Error('Trello apiKey and apiToken are required. Provide them as arguments or set TRELLO_API_KEY and TRELLO_API_TOKEN.');
+    throw new Error(
+      'Trello apiKey and apiToken are required. Provide them as arguments or set TRELLO_API_KEY and TRELLO_API_TOKEN.',
+    );
   }
 
   return await trelloRepository.createCard(

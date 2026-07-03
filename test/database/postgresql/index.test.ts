@@ -67,9 +67,11 @@ describe('PostgreSQL Database Tools', () => {
       },
     });
 
-    expect(mockExecutePostgresQuery).toHaveBeenCalledWith('SELECT * FROM users WHERE id = $1', [
-      '2',
-    ], undefined);
+    expect(mockExecutePostgresQuery).toHaveBeenCalledWith(
+      'SELECT * FROM users WHERE id = $1',
+      ['2'],
+      undefined,
+    );
     expect(response).toEqual({
       content: [
         {

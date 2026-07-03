@@ -12,7 +12,10 @@ vi.mock('../../../../src/tools/projectmanagement/jira/repository/jira.repository
   },
 }));
 
-import { getJiraTicket, createJiraTicket } from '../../../../src/tools/projectmanagement/jira/service/jira.service.js';
+import {
+  getJiraTicket,
+  createJiraTicket,
+} from '../../../../src/tools/projectmanagement/jira/service/jira.service.js';
 
 describe('JiraService', () => {
   beforeEach(() => {
@@ -57,10 +60,33 @@ describe('JiraService', () => {
   describe('createJiraTicket', () => {
     it('should call repository.createTicket when arguments are valid', async () => {
       mockCreateTicket.mockResolvedValueOnce({ key: 'PRJ-10' });
-      
-      const result = await createJiraTicket('PRJ', 'Title', 'Task', 'Desc', 'High', ['bug'], 'assignee', undefined, 'mydomain', 'myemail', 'mytoken');
-      
-      expect(mockCreateTicket).toHaveBeenCalledWith('PRJ', 'Title', 'Task', 'Desc', 'High', ['bug'], 'assignee', 'mydomain', 'myemail', 'mytoken');
+
+      const result = await createJiraTicket(
+        'PRJ',
+        'Title',
+        'Task',
+        'Desc',
+        'High',
+        ['bug'],
+        'assignee',
+        undefined,
+        'mydomain',
+        'myemail',
+        'mytoken',
+      );
+
+      expect(mockCreateTicket).toHaveBeenCalledWith(
+        'PRJ',
+        'Title',
+        'Task',
+        'Desc',
+        'High',
+        ['bug'],
+        'assignee',
+        'mydomain',
+        'myemail',
+        'mytoken',
+      );
       expect(result).toEqual({ key: 'PRJ-10' });
     });
 
@@ -69,19 +95,36 @@ describe('JiraService', () => {
       process.env.JIRA_EMAIL = 'envemail';
       process.env.JIRA_API_TOKEN = 'envtoken';
       mockCreateTicket.mockResolvedValueOnce({ key: 'PRJ-11' });
-      
+
       await createJiraTicket('PRJ', 'Title', 'Task');
-      
-      expect(mockCreateTicket).toHaveBeenCalledWith('PRJ', 'Title', 'Task', undefined, undefined, undefined, undefined, 'envdomain', 'envemail', 'envtoken');
+
+      expect(mockCreateTicket).toHaveBeenCalledWith(
+        'PRJ',
+        'Title',
+        'Task',
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        'envdomain',
+        'envemail',
+        'envtoken',
+      );
     });
 
     it('should throw error if projectKey, summary, or issueType are missing', async () => {
       process.env.JIRA_DOMAIN = 'envdomain';
       process.env.JIRA_EMAIL = 'envemail';
       process.env.JIRA_API_TOKEN = 'envtoken';
-      await expect(createJiraTicket('', 'Title', 'Task')).rejects.toThrow('Jira projectKey, summary, and issueType are required to create a ticket.');
-      await expect(createJiraTicket('PRJ', '', 'Task')).rejects.toThrow('Jira projectKey, summary, and issueType are required to create a ticket.');
-      await expect(createJiraTicket('PRJ', 'Title', '')).rejects.toThrow('Jira projectKey, summary, and issueType are required to create a ticket.');
+      await expect(createJiraTicket('', 'Title', 'Task')).rejects.toThrow(
+        'Jira projectKey, summary, and issueType are required to create a ticket.',
+      );
+      await expect(createJiraTicket('PRJ', '', 'Task')).rejects.toThrow(
+        'Jira projectKey, summary, and issueType are required to create a ticket.',
+      );
+      await expect(createJiraTicket('PRJ', 'Title', '')).rejects.toThrow(
+        'Jira projectKey, summary, and issueType are required to create a ticket.',
+      );
     });
   });
 });

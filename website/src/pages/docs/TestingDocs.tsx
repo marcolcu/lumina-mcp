@@ -52,6 +52,18 @@ export function TestingDocs() {
           </div>
         </div>
 
+        {/* Prompt 3 */}
+        <div className="p-6 border border-border rounded-xl bg-card">
+          <h3 className="font-mono text-lg text-blue-500 m-0 mb-2">/create-integration-test</h3>
+          <p className="text-xs md:text-sm text-muted-foreground mb-4">
+            {t('docs.testing.prompts.p3Desc', 'Generates integration tests leveraging real environments, API dependencies, and Testcontainers (e.g., MySQL, PostgreSQL) for robust verification.')}
+          </p>
+          <span className="text-[10px] uppercase font-extrabold text-muted-foreground tracking-wider block mb-2">{t('docs.testing.prompts.exampleUsage')}</span>
+          <div className="bg-muted p-3 rounded-lg font-mono text-sm border border-border/50 text-foreground overflow-x-auto">
+            /create-integration-test "Create integration tests for the PostgreSQL controller using Testcontainers."
+          </div>
+        </div>
+
       </div>
     </>
   )

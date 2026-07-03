@@ -17,7 +17,9 @@ export function getRestrictedColumns(): string[] {
     'secret_key',
     'passphrase',
   ];
-  const configPath = process.env.LUMINA_RESTRICTED_COLUMNS_PATH || path.join(process.cwd(), '.lumina/database/restricColumn.json');
+  const configPath =
+    process.env.LUMINA_RESTRICTED_COLUMNS_PATH ||
+    path.join(process.cwd(), '.lumina/database/restricColumn.json');
 
   try {
     if (fs.existsSync(configPath)) {

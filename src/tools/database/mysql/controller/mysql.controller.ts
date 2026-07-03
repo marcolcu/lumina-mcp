@@ -1,4 +1,5 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import mysql from 'mysql2';
 import { runMySQLQuery, analyzeMySQLQueryPlan } from '../service/mysql.service.js';
 import { saveAuditReport } from '../../utils/report.js';
 import { RUNNING_MYSQL_QUERY_PROMPT, AUDITOR_MYSQL_PROMPT } from '../../prompts/index.js';
@@ -12,7 +13,6 @@ import {
 } from '../../dto/database.dto.js';
 
 export function registerMysqlController(server: McpServer) {
-
   server.registerTool(
     'execute_mysql_query',
     {
@@ -86,7 +86,8 @@ export function registerMysqlController(server: McpServer) {
     },
     async ({ table, databaseName }) => {
       try {
-        const rows = await runMySQLQuery('SHOW COLUMNS FROM ??', [table], databaseName);
+        const formattedQuery = `SHOW COLUMNS FROM ${mysql.escapeId(table)}`;
+        const rows = await runMySQLQuery(formattedQuery, [], databaseName);
         return {
           content: [
             {
@@ -205,7 +206,8 @@ export function registerMysqlController(server: McpServer) {
         const regex = new RegExp(`\\b${table}\\b`, 'i');
         if (regex.test(cmdLower)) {
           try {
-            const columns = await runMySQLQuery<unknown>('SHOW COLUMNS FROM ??', [table]);
+            const formattedQuery = `SHOW COLUMNS FROM ${mysql.escapeId(table)}`;
+            const columns = await runMySQLQuery<unknown>(formattedQuery, []);
             matchedSchemas.push(`Table: ${table}\nColumns:\n${JSON.stringify(columns, null, 2)}`);
           } catch {
             console.error('Failed to inspect table');

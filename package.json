@@ -1,6 +1,6 @@
 {
   "name": "lumina-mcp",
-  "version": "1.3.1",
+  "version": "1.3.2",
   "description": "Unified MCP toolkit for engineering workflows, database connections, and source control",
   "keywords": [
     "mcp",
@@ -19,7 +19,9 @@
     "orchestration tool",
     "lumina",
     "AI Testing",
-    "unit testing"
+    "unit testing",
+    "integration testing",
+    "e2e testing"
   ],
   "author": "Wahyu-Labs (darm102)",
   "license": "MIT",
@@ -46,6 +48,7 @@
     "lint": "eslint \"src/**/*.ts\" \"test/**/*.ts\"",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\" \".eslintrc.json\" \"tsconfig.json\" \"test/tsconfig.json\"",
     "test": "vitest run",
+    "test:integration": "vitest run --reporter=verbose test/integration",
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
@@ -56,6 +59,8 @@
     "zod": "^3.23.8"
   },
   "devDependencies": {
+    "@testcontainers/mysql": "^12.0.4",
+    "@testcontainers/postgresql": "^12.0.4",
     "@types/node": "^20.14.2",
     "@types/pg": "^8.11.6",
     "@typescript-eslint/eslint-plugin": "^8.60.1",
@@ -65,6 +70,7 @@
     "eslint": "^8.57.0",
     "eslint-config-prettier": "^9.1.0",
     "prettier": "^3.3.1",
+    "testcontainers": "^12.0.4",
     "tsx": "^4.15.1",
     "typescript": "^5.4.5",
     "vitest": "^1.6.0"

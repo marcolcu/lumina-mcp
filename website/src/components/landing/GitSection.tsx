@@ -46,6 +46,11 @@ export function GitSection() {
       name: "/fix_pr_review_message",
       desc: t('git.prompts.fix'),
       cmd: '/fix_pr_review_message "Resolve PR comments on #104."'
+    },
+    {
+      name: "/create_gitea_pr",
+      desc: t('git.prompts.giteaPr', 'Opens a new Gitea Pull Request.'),
+      cmd: '/create_gitea_pr "Create a Gitea PR into main from the current branch."'
     }
   ]
 

@@ -35,20 +35,31 @@ export function validateReadOnlyPostgresQuery(query: string): void {
   }
 }
 
-export async function runPostgresQuery<T>(query: string, params?: unknown[], databaseName?: string): Promise<T[]> {
+export async function runPostgresQuery<T>(
+  query: string,
+  params?: unknown[],
+  databaseName?: string,
+): Promise<T[]> {
   validateReadOnlyPostgresQuery(query);
   const rows = await executePostgresQuery<T>(query, params, databaseName);
   return filterSensitiveColumns(rows);
 }
 
-export async function analyzePostgresQueryPlan(sql: string, databaseName?: string): Promise<PostgresQueryAnalysisResult> {
+export async function analyzePostgresQueryPlan(
+  sql: string,
+  databaseName?: string,
+): Promise<PostgresQueryAnalysisResult> {
   const explainSQL = `EXPLAIN ${sql}`;
   const rows = await executePostgresQuery<Record<string, string>>(explainSQL, [], databaseName);
   const plan = rows.map((r) => Object.values(r)[0] as string);
 
   let explainAnalyzePlan: string[] | null = null;
   try {
-    const analyzeRows = await executePostgresQuery<Record<string, string>>(`EXPLAIN ANALYZE ${sql}`, [], databaseName);
+    const analyzeRows = await executePostgresQuery<Record<string, string>>(
+      `EXPLAIN ANALYZE ${sql}`,
+      [],
+      databaseName,
+    );
     explainAnalyzePlan = analyzeRows.map((r) => Object.values(r)[0] as string);
   } catch (error) {
     // Ignore if fails or not permitted
@@ -88,7 +99,9 @@ export async function analyzePostgresQueryPlan(sql: string, databaseName?: strin
   // 2. Security audit
   if (/\bselect\s+\*/i.test(sql)) {
     securityVerdict = 'WARNING';
-    notes.push('SELECT * wildcard is used. This exposes unnecessary columns and decreases efficiency.');
+    notes.push(
+      'SELECT * wildcard is used. This exposes unnecessary columns and decreases efficiency.',
+    );
     suggestions.push('Explicitly define the specific columns required in the SELECT statement.');
   }
 

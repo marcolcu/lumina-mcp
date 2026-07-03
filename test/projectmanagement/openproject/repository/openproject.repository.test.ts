@@ -17,7 +17,7 @@ describe('OpenProjectRepository', () => {
     } as Response);
 
     const result = await repository.getWorkPackage('1234', 'test.domain.com', 'testapikey');
-    
+
     expect(global.fetch).toHaveBeenCalledWith(
       'https://test.domain.com/api/v3/work_packages/1234',
       expect.objectContaining({
@@ -57,7 +57,7 @@ describe('OpenProjectRepository', () => {
       'High',
       'User1',
       'test.domain.com',
-      'testapikey'
+      'testapikey',
     );
 
     expect(global.fetch).toHaveBeenCalledWith(
@@ -83,7 +83,16 @@ describe('OpenProjectRepository', () => {
     } as Response);
 
     await expect(
-      repository.createWorkPackage('999', 'Subj', 'Task', undefined, undefined, undefined, 'domain.com', 'key')
+      repository.createWorkPackage(
+        '999',
+        'Subj',
+        'Task',
+        undefined,
+        undefined,
+        undefined,
+        'domain.com',
+        'key',
+      ),
     ).rejects.toThrow('Failed to create OpenProject work package: Bad Request - Invalid project');
   });
 });

@@ -9,11 +9,15 @@ export async function getOpenProjectWorkPackage(
   const finalApiKey = apiKey || process.env.OPENPROJECT_API_KEY;
 
   if (!finalDomain) {
-    throw new Error('OpenProject domain is required. Provide it as an argument or set OPENPROJECT_DOMAIN.');
+    throw new Error(
+      'OpenProject domain is required. Provide it as an argument or set OPENPROJECT_DOMAIN.',
+    );
   }
 
   if (!finalApiKey) {
-    throw new Error('OpenProject apiKey is required. Provide it as an argument or set OPENPROJECT_API_KEY.');
+    throw new Error(
+      'OpenProject apiKey is required. Provide it as an argument or set OPENPROJECT_API_KEY.',
+    );
   }
 
   return await openProjectRepository.getWorkPackage(workPackageId, finalDomain, finalApiKey);
@@ -34,15 +38,21 @@ export async function createOpenProjectWorkPackage(
   const finalApiKey = apiKey || process.env.OPENPROJECT_API_KEY;
 
   if (!projectId || !subject || !type) {
-    throw new Error('OpenProject projectId, subject, and type are required to create a work package.');
+    throw new Error(
+      'OpenProject projectId, subject, and type are required to create a work package.',
+    );
   }
 
   if (!finalDomain) {
-    throw new Error('OpenProject domain is required. Provide it as an argument or set OPENPROJECT_DOMAIN.');
+    throw new Error(
+      'OpenProject domain is required. Provide it as an argument or set OPENPROJECT_DOMAIN.',
+    );
   }
 
   if (!finalApiKey) {
-    throw new Error('OpenProject apiKey is required. Provide it as an argument or set OPENPROJECT_API_KEY.');
+    throw new Error(
+      'OpenProject apiKey is required. Provide it as an argument or set OPENPROJECT_API_KEY.',
+    );
   }
 
   const wp = await openProjectRepository.createWorkPackage(

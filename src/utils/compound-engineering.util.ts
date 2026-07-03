@@ -8,7 +8,10 @@ import os from 'os';
  */
 export function hasCompoundEngineering(): boolean {
   // 1. Check environment variable override
-  if (process.env.HAS_COMPOUND_ENGINEERING === 'true' || process.env.HAS_COMPOUND_ENGINEERING === '1') {
+  if (
+    process.env.HAS_COMPOUND_ENGINEERING === 'true' ||
+    process.env.HAS_COMPOUND_ENGINEERING === '1'
+  ) {
     return true;
   }
 
@@ -34,13 +37,53 @@ export function hasCompoundEngineering(): boolean {
     // Claude Desktop (Windows)
     path.join(homeDir, 'AppData', 'Roaming', 'Claude', 'claude_desktop_config.json'),
     // Cline / Roo Code in VS Code (Mac)
-    path.join(homeDir, 'Library', 'Application Support', 'Code', 'User', 'globalStorage', 'saoudrizwan.claude-dev', 'settings', 'cline_mcp_settings.json'),
-    path.join(homeDir, 'Library', 'Application Support', 'Code', 'User', 'globalStorage', 'rooveterinaryinc.roo-cline', 'settings', 'cline_mcp_settings.json'),
+    path.join(
+      homeDir,
+      'Library',
+      'Application Support',
+      'Code',
+      'User',
+      'globalStorage',
+      'saoudrizwan.claude-dev',
+      'settings',
+      'cline_mcp_settings.json',
+    ),
+    path.join(
+      homeDir,
+      'Library',
+      'Application Support',
+      'Code',
+      'User',
+      'globalStorage',
+      'rooveterinaryinc.roo-cline',
+      'settings',
+      'cline_mcp_settings.json',
+    ),
     // Cline / Roo Code in Cursor (Mac)
-    path.join(homeDir, 'Library', 'Application Support', 'Cursor', 'User', 'globalStorage', 'saoudrizwan.claude-dev', 'settings', 'cline_mcp_settings.json'),
-    path.join(homeDir, 'Library', 'Application Support', 'Cursor', 'User', 'globalStorage', 'rooveterinaryinc.roo-cline', 'settings', 'cline_mcp_settings.json'),
+    path.join(
+      homeDir,
+      'Library',
+      'Application Support',
+      'Cursor',
+      'User',
+      'globalStorage',
+      'saoudrizwan.claude-dev',
+      'settings',
+      'cline_mcp_settings.json',
+    ),
+    path.join(
+      homeDir,
+      'Library',
+      'Application Support',
+      'Cursor',
+      'User',
+      'globalStorage',
+      'rooveterinaryinc.roo-cline',
+      'settings',
+      'cline_mcp_settings.json',
+    ),
     // Claude Code CLI config
-    path.join(homeDir, '.claude.json')
+    path.join(homeDir, '.claude.json'),
   ];
 
   for (const configFile of mcpConfigFiles) {

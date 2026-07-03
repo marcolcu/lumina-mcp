@@ -50,9 +50,7 @@ export class TrelloRepository {
 
     if (!response.ok) {
       const errorText = await response.text();
-      throw new Error(
-        `Failed to create Trello card: ${response.statusText} - ${errorText}`,
-      );
+      throw new Error(`Failed to create Trello card: ${response.statusText} - ${errorText}`);
     }
 
     return await response.json();
