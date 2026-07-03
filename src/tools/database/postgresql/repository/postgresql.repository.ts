@@ -56,7 +56,11 @@ export function getPostgresPool(databaseName?: string): pg.Pool {
   return pools[dbName];
 }
 
-export async function executePostgresQuery<T>(query: string, params?: unknown[], databaseName?: string): Promise<T[]> {
+export async function executePostgresQuery<T>(
+  query: string,
+  params?: unknown[],
+  databaseName?: string,
+): Promise<T[]> {
   const connectionPool = getPostgresPool(databaseName);
   const result = await connectionPool.query(query, params);
   return result.rows as T[];

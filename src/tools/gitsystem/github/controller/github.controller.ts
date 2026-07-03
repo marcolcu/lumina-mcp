@@ -40,7 +40,8 @@ export function registerGithubController(server: McpServer) {
   server.registerTool(
     'generate_commit_and_push',
     {
-      description: 'Generate a commit message based on local changes, commit, and push to GitHub. If GITHUB_TOKEN env var is not set, the tool falls back to git CLI commands automatically.',
+      description:
+        'Generate a commit message based on local changes, commit, and push to GitHub. If GITHUB_TOKEN env var is not set, the tool falls back to git CLI commands automatically.',
       inputSchema: GenerateCommitSchema,
     },
     async ({ branch, commitMessage, diff, files }) => {
@@ -73,7 +74,8 @@ export function registerGithubController(server: McpServer) {
   server.registerTool(
     'create_github_pr',
     {
-      description: 'Create a pull request to GitHub. Falls back to official GitHub MCP or gh CLI if GITHUB_TOKEN is not configured.',
+      description:
+        'Create a pull request to GitHub. Falls back to official GitHub MCP or gh CLI if GITHUB_TOKEN is not configured.',
       inputSchema: CreatePRSchema,
     },
     async ({ repository, title, head, base, body }) => {
@@ -105,7 +107,8 @@ export function registerGithubController(server: McpServer) {
   server.registerTool(
     'review_github_pr',
     {
-      description: 'Submit an AI-based code review to a GitHub Pull Request. Falls back to official GitHub MCP or gh CLI if GITHUB_TOKEN is not configured.',
+      description:
+        'Submit an AI-based code review to a GitHub Pull Request. Falls back to official GitHub MCP or gh CLI if GITHUB_TOKEN is not configured.',
       inputSchema: ReviewPRSchema,
     },
     async ({ repository, pullRequestNumber, event, body, comments }) => {
@@ -137,7 +140,8 @@ export function registerGithubController(server: McpServer) {
   server.registerTool(
     'fix_github_pr_review',
     {
-      description: 'Fetch PR review comments to help the AI apply fixes locally. Falls back to official GitHub MCP if GITHUB_TOKEN is not configured.',
+      description:
+        'Fetch PR review comments to help the AI apply fixes locally. Falls back to official GitHub MCP if GITHUB_TOKEN is not configured.',
       inputSchema: FixPRSchema,
     },
     async ({ repository, pullRequestNumber }) => {
@@ -170,7 +174,8 @@ export function registerGithubController(server: McpServer) {
   server.registerTool(
     'get_github_pr_diff',
     {
-      description: 'Fetch the diff of a GitHub Pull Request. Falls back to official GitHub MCP or gh CLI if GITHUB_TOKEN is not configured.',
+      description:
+        'Fetch the diff of a GitHub Pull Request. Falls back to official GitHub MCP or gh CLI if GITHUB_TOKEN is not configured.',
       inputSchema: GetPRDiffSchema,
     },
     async ({ repository, pullRequestNumber }) => {
@@ -202,7 +207,8 @@ export function registerGithubController(server: McpServer) {
   server.registerTool(
     'reply_to_pr_comment',
     {
-      description: 'Reply to an inline comment in a GitHub pull request review. Falls back to official GitHub MCP if GITHUB_TOKEN is not configured.',
+      description:
+        'Reply to an inline comment in a GitHub pull request review. Falls back to official GitHub MCP if GITHUB_TOKEN is not configured.',
       inputSchema: ReplyToPRCommentSchema,
     },
     async ({ repository, pullRequestNumber, commentId, body }) => {
@@ -234,7 +240,8 @@ export function registerGithubController(server: McpServer) {
   server.registerTool(
     'resolve_pr_review_thread',
     {
-      description: 'Resolve a GitHub pull request review thread using its comment node_id. Falls back to official GitHub MCP if GITHUB_TOKEN is not configured.',
+      description:
+        'Resolve a GitHub pull request review thread using its comment node_id. Falls back to official GitHub MCP if GITHUB_TOKEN is not configured.',
       inputSchema: ResolvePRThreadSchema,
     },
     async ({ repository, pullRequestNumber, commentNodeId }) => {

@@ -70,17 +70,35 @@ In your MCP client, you can use these prompts as slash commands:
 
 ---
 
-### Version Control Tools (GitHub)
+### Version Control Tools (GitHub & Gitea)
 
 | Tool | Description |
 |------|-------------|
-| `generate_commit_and_push` | Generate a Conventional Commit message, stage files, and push |
+| `generate_commit_and_push` | Generate a Conventional Commit message, stage files, and push (provider-agnostic — works for GitHub, Gitea, or any git remote) |
 | `create_github_pr` | Create a GitHub Pull Request with auto-generated tech company-style description |
 | `review_github_pr` | Submit a rigorous AI code review directly to a GitHub Pull Request |
 | `fix_github_pr_review` | Fetch PR review comments and automatically apply fixes to the codebase |
 | `get_github_pr_diff` | Download a clean unified diff of any open GitHub PR for automated review |
 | `reply_to_pr_comment` | Reply to inline comments within a GitHub Pull Request review |
 | `resolve_pr_review_thread` | Resolve a GitHub PR review thread by its comment node ID |
+
+#### Gitea (self-hosted)
+
+Gitea reaches parity with GitHub for the four core capabilities — commit + push, create PR, fetch diff, and review PR. It is configured with a **full base URL** so any self-hosted instance (custom host, scheme, or port) is supported.
+
+| Tool | Description |
+|------|-------------|
+| `generate_commit_and_push` | Shared with GitHub — commits and pushes to the current `origin` remote |
+| `create_gitea_pr` | Create a Pull Request on a self-hosted Gitea instance |
+| `review_gitea_pr` | Submit an AI code review (with optional inline comments) to a Gitea PR |
+| `fix_gitea_pr_review` | Fetch Gitea PR review comments so the AI can apply fixes locally |
+| `get_gitea_pr_diff` | Download a unified diff of a Gitea PR |
+
+**Configuration:** set `GITEA_BASE_URL` (e.g. `https://gitea.example.com:3000`) and `GITEA_TOKEN`, or pass `baseUrl` directly to any Gitea tool. Auth uses a Gitea access token (`Authorization: token <TOKEN>`).
+
+**Known gaps vs GitHub** (Gitea's API has no equivalent, so these tools are GitHub-only by design and are intentionally not registered for Gitea):
+- `reply_to_pr_comment` — Gitea has no 1:1 reply-to-inline-comment endpoint (its review-comment model differs).
+- `resolve_pr_review_thread` — Gitea exposes no GraphQL API nor an equivalent "resolve review thread" semantic.
 
 **Git Prompts:**
 
@@ -213,6 +231,8 @@ Add this to your MCP client configuration (e.g. `mcp.json`, Cursor settings, Cla
         "MYSQL_URL": "mysql://user:password@localhost:3306/db_name",
         "POSTGRES_URL": "postgres://user:password@localhost:5432/db_name",
         "GITHUB_TOKEN": "your-github-personal-access-token",
+        "GITEA_BASE_URL": "https://gitea.example.com:3000",
+        "GITEA_TOKEN": "your-gitea-access-token",
         "JIRA_URL": "https://yourcompany.atlassian.net",
         "JIRA_EMAIL": "your.email@company.com",
         "JIRA_API_TOKEN": "your-jira-token",

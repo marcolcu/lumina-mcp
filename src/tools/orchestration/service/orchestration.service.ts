@@ -19,15 +19,15 @@ export class OrchestrationService {
     try {
       const __filename = fileURLToPath(import.meta.url);
       const __dirname = path.dirname(__filename);
-      
+
       const prodSkillsDir = path.join(__dirname, 'skills');
       const devSkillsDir = path.join(__dirname, '..', '..', '..', 'skills');
-      
+
       let filePath = path.join(prodSkillsDir, `${skillName}.md`);
       if (!fs.existsSync(filePath)) {
         filePath = path.join(devSkillsDir, `${skillName}.md`);
       }
-      
+
       if (fs.existsSync(filePath)) {
         return '\n\n' + fs.readFileSync(filePath, 'utf-8') + '\n\n';
       }
@@ -97,7 +97,9 @@ export class OrchestrationService {
           instructions = GIT_SYSTEM_PROMPT;
           break;
         default:
-          return { error: 'Invalid phase number. Please request a phase between 1 and 5 (tests skipped).' };
+          return {
+            error: 'Invalid phase number. Please request a phase between 1 and 5 (tests skipped).',
+          };
       }
     }
 
@@ -147,11 +149,11 @@ export class OrchestrationService {
    */
   public getOrchestrationPrompt(command?: string, tokenBudget?: string): string {
     let context = command || 'No specific command provided.';
-    
+
     if (tokenBudget) {
       context += `\n\n[SYSTEM DIRECTIVE]: You must use tokenBudget: "${tokenBudget}" when calling the \`get_orchestration_phase\` tool.`;
     }
-    
+
     return SENIOR_SWE_ORCHESTRATION_PROMPT.replace('{{context}}', context);
   }
 }

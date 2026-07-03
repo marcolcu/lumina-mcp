@@ -12,7 +12,6 @@ import {
 } from '../../dto/database.dto.js';
 
 export function registerMysqlController(server: McpServer) {
-
   server.registerTool(
     'execute_mysql_query',
     {

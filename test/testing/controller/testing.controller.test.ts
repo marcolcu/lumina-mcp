@@ -1,7 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { registerTestingController } from '../../../src/tools/testing/controller/testing.controller.js';
-import { CREATE_UNIT_TEST_PROMPT, CREATE_E2E_TEST_PROMPT } from '../../../src/tools/testing/prompts/index.js';
+import {
+  CREATE_UNIT_TEST_PROMPT,
+  CREATE_E2E_TEST_PROMPT,
+} from '../../../src/tools/testing/prompts/index.js';
 
 describe('Testing Controller', () => {
   let mockServer: {
@@ -35,7 +38,9 @@ describe('Testing Controller', () => {
   });
 
   describe('create-unit-test prompt', () => {
-    let createUnitTestCallback: (args: { command?: string }) => Promise<{ messages: { role: string; content: { text: string } }[] }>;
+    let createUnitTestCallback: (args: {
+      command?: string;
+    }) => Promise<{ messages: { role: string; content: { text: string } }[] }>;
 
     beforeEach(() => {
       registerTestingController(mockServer as unknown as McpServer);
@@ -64,7 +69,9 @@ describe('Testing Controller', () => {
   });
 
   describe('create-e2e-test prompt', () => {
-    let createE2ETestCallback: (args: { command?: string }) => Promise<{ messages: { role: string; content: { text: string } }[] }>;
+    let createE2ETestCallback: (args: {
+      command?: string;
+    }) => Promise<{ messages: { role: string; content: { text: string } }[] }>;
 
     beforeEach(() => {
       registerTestingController(mockServer as unknown as McpServer);

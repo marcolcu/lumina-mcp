@@ -17,7 +17,7 @@ describe('TrelloRepository', () => {
     } as Response);
 
     const result = await repository.getCard('abc1234', 'testkey', 'testtoken');
-    
+
     expect(global.fetch).toHaveBeenCalledWith(
       'https://api.trello.com/1/cards/abc1234',
       expect.objectContaining({
@@ -58,7 +58,7 @@ describe('TrelloRepository', () => {
       'label1',
       'member1',
       'testkey',
-      'testtoken'
+      'testtoken',
     );
 
     expect(global.fetch).toHaveBeenCalledWith(
@@ -82,7 +82,17 @@ describe('TrelloRepository', () => {
     } as Response);
 
     await expect(
-      repository.createCard('INVALID', 'Name', undefined, undefined, undefined, undefined, undefined, 'key', 'token')
+      repository.createCard(
+        'INVALID',
+        'Name',
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        'key',
+        'token',
+      ),
     ).rejects.toThrow('Failed to create Trello card: Bad Request - Invalid list');
   });
 });

@@ -3,6 +3,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { registerMysqlController } from './tools/database/mysql/index.js';
 import { registerPostgresqlController } from './tools/database/postgresql/index.js';
 import { registerGithubController } from './tools/gitsystem/index.js';
+import { registerGiteaController } from './tools/gitsystem/gitea/index.js';
 import { registerProjectManagementController } from './tools/projectmanagement/index.js';
 import { registerOrchestrationController } from './tools/orchestration/index.js';
 import { registerTestingController } from './tools/testing/index.js';
@@ -17,6 +18,7 @@ export const server = new McpServer({
 registerMysqlController(server);
 registerPostgresqlController(server);
 registerGithubController(server);
+registerGiteaController(server);
 registerProjectManagementController(server);
 registerOrchestrationController(server);
 registerTestingController(server);

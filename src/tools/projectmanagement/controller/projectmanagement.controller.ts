@@ -1,7 +1,10 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { getJiraTicket, createJiraTicket } from '../jira/service/jira.service.js';
 import { getTrelloCard, createTrelloCard } from '../trello/service/trello.service.js';
-import { getOpenProjectWorkPackage, createOpenProjectWorkPackage } from '../openproject/service/openproject.service.js';
+import {
+  getOpenProjectWorkPackage,
+  createOpenProjectWorkPackage,
+} from '../openproject/service/openproject.service.js';
 import { getGithubIssue, createGithubIssue } from '../github/service/github.service.js';
 import {
   GetJiraTicketSchema,
@@ -197,9 +200,33 @@ export function registerProjectManagementController(server: McpServer) {
         'Create a Jira ticket/issue. Compatible with Compound Engineering (ce-plan, ce-work, ce-code-review) tracker-defer system as a ticket creation sink. Credentials can be passed as parameters or auto-loaded from JIRA_DOMAIN, JIRA_EMAIL, JIRA_API_TOKEN env vars. Falls back to official Atlassian MCP if credentials are not available.',
       inputSchema: CreateJiraTicketSchema,
     },
-    async ({ projectKey, summary, issueType, description, priority, labels, assigneeAccountId, attachmentPath, domain, email, apiToken }) => {
+    async ({
+      projectKey,
+      summary,
+      issueType,
+      description,
+      priority,
+      labels,
+      assigneeAccountId,
+      attachmentPath,
+      domain,
+      email,
+      apiToken,
+    }) => {
       try {
-        const ticket = await createJiraTicket(projectKey, summary, issueType, description, priority, labels, assigneeAccountId, attachmentPath, domain, email, apiToken);
+        const ticket = await createJiraTicket(
+          projectKey,
+          summary,
+          issueType,
+          description,
+          priority,
+          labels,
+          assigneeAccountId,
+          attachmentPath,
+          domain,
+          email,
+          apiToken,
+        );
         return {
           content: [
             {
@@ -232,7 +259,17 @@ export function registerProjectManagementController(server: McpServer) {
     },
     async ({ idList, name, desc, pos, due, idLabels, idMembers, apiKey, apiToken }) => {
       try {
-        const card = await createTrelloCard(idList, name, desc, pos, due, idLabels, idMembers, apiKey, apiToken);
+        const card = await createTrelloCard(
+          idList,
+          name,
+          desc,
+          pos,
+          due,
+          idLabels,
+          idMembers,
+          apiKey,
+          apiToken,
+        );
         return {
           content: [
             {
@@ -263,9 +300,29 @@ export function registerProjectManagementController(server: McpServer) {
         'Create an OpenProject work package. Compatible with Compound Engineering (ce-plan, ce-work, ce-code-review) tracker-defer system as a ticket creation sink. Credentials can be passed as parameters or auto-loaded from OPENPROJECT_DOMAIN and OPENPROJECT_API_KEY env vars. Falls back to official OpenProject MCP if credentials are not available.',
       inputSchema: CreateOpenProjectWorkPackageSchema,
     },
-    async ({ projectId, subject, type, description, priority, assignee, attachmentPath, domain, apiKey }) => {
+    async ({
+      projectId,
+      subject,
+      type,
+      description,
+      priority,
+      assignee,
+      attachmentPath,
+      domain,
+      apiKey,
+    }) => {
       try {
-        const wp = await createOpenProjectWorkPackage(projectId, subject, type, description, priority, assignee, attachmentPath, domain, apiKey);
+        const wp = await createOpenProjectWorkPackage(
+          projectId,
+          subject,
+          type,
+          description,
+          priority,
+          assignee,
+          attachmentPath,
+          domain,
+          apiKey,
+        );
         return {
           content: [
             {
@@ -298,7 +355,16 @@ export function registerProjectManagementController(server: McpServer) {
     },
     async ({ owner, repo, title, body, labels, assignees, milestone, githubToken }) => {
       try {
-        const issue = await createGithubIssue(owner, repo, title, body, labels, assignees, milestone, githubToken);
+        const issue = await createGithubIssue(
+          owner,
+          repo,
+          title,
+          body,
+          labels,
+          assignees,
+          milestone,
+          githubToken,
+        );
         return {
           content: [
             {
@@ -327,7 +393,8 @@ export function registerProjectManagementController(server: McpServer) {
     'pm_summarize_ticket',
     {
       title: 'Senior PM Summarize Ticket',
-      description: 'Summarize a raw Jira, Trello, OpenProject, or GitHub ticket/issue as a Senior Product Manager.',
+      description:
+        'Summarize a raw Jira, Trello, OpenProject, or GitHub ticket/issue as a Senior Product Manager.',
       argsSchema: ProjectManagementPromptSchema,
     },
     async ({ command }) => {
@@ -405,14 +472,19 @@ export function registerProjectManagementController(server: McpServer) {
     'pm_create_ticket',
     {
       title: 'Senior PM Create Ticket',
-      description: 'Generate a production-grade, structured ticket body based on raw context (feature, bug, findings) adhering to Big Tech standards.',
+      description:
+        'Generate a production-grade, structured ticket body based on raw context (feature, bug, findings) adhering to Big Tech standards.',
       argsSchema: ProjectManagementPromptSchema,
     },
     async ({ command }) => {
-      const promptText = PM_CREATE_TICKET_PROMPT
-        .replace('{{context}}', () => command || 'No context provided.')
-        .replace('{{platform}}', 'Markdown (GitHub/OpenProject) / ADF (Jira) / Plain text (Trello) - Please determine from context or use Markdown as default');
-      
+      const promptText = PM_CREATE_TICKET_PROMPT.replace(
+        '{{context}}',
+        () => command || 'No context provided.',
+      ).replace(
+        '{{platform}}',
+        'Markdown (GitHub/OpenProject) / ADF (Jira) / Plain text (Trello) - Please determine from context or use Markdown as default',
+      );
+
       return {
         messages: [
           {

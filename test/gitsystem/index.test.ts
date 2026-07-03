@@ -22,12 +22,8 @@ const {
 }));
 
 vi.mock('../../src/tools/gitsystem/github/service/github.service.js', () => ({
-  generateAndPushCommit: (
-    branch: string,
-    msg: string,
-    files: string[],
-    diff?: string,
-  ) => mockGenerateAndPushCommit(branch, msg, files, diff),
+  generateAndPushCommit: (branch: string, msg: string, files: string[], diff?: string) =>
+    mockGenerateAndPushCommit(branch, msg, files, diff),
   createPullRequest: (repo: string, title: string, head: string, base: string, body: string) =>
     mockCreatePullRequest(repo, title, head, base, body),
   createCodeReview: (
@@ -276,20 +272,14 @@ describe('Git System MCP Tools and Prompts', () => {
         },
       })) as { content: Array<{ type: string; text: string }> };
 
-      expect(mockCreateCodeReview).toHaveBeenCalledWith(
-        'owner/repo',
-        42,
-        'APPROVE',
-        'Good job!',
-        [
-          {
-            path: 'src/file.ts',
-            line: 10,
-            side: 'RIGHT',
-            body: 'Fix this line please',
-          },
-        ],
-      );
+      expect(mockCreateCodeReview).toHaveBeenCalledWith('owner/repo', 42, 'APPROVE', 'Good job!', [
+        {
+          path: 'src/file.ts',
+          line: 10,
+          side: 'RIGHT',
+          body: 'Fix this line please',
+        },
+      ]);
       expect(response).toEqual({
         content: [
           {

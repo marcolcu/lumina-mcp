@@ -53,7 +53,11 @@ export function getMySQLPool(databaseName?: string): mysql.Pool {
   return pools[dbName];
 }
 
-export async function executeMySQLQuery<T>(query: string, params?: unknown[], databaseName?: string): Promise<T[]> {
+export async function executeMySQLQuery<T>(
+  query: string,
+  params?: unknown[],
+  databaseName?: string,
+): Promise<T[]> {
   const connectionPool = getMySQLPool(databaseName);
   const typedParams = params as (string | number | boolean | null | Date | Buffer)[] | undefined;
   const [rows] = await connectionPool.execute(query, typedParams);

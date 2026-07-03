@@ -46,12 +46,13 @@ export function registerOrchestrationController(server: McpServer) {
     'lumina_orchestrate',
     {
       title: 'Senior SWE End-to-End Orchestration',
-      description: 'Run an end-to-end AI workflow across 5 or 6 phases depending on test inclusion, like a Senior Software Engineer.',
+      description:
+        'Run an end-to-end AI workflow across 5 or 6 phases depending on test inclusion, like a Senior Software Engineer.',
       argsSchema: OrchestrationPromptSchema,
     },
     async ({ command, tokenBudget }) => {
       const promptText = orchestrationService.getOrchestrationPrompt(command, tokenBudget);
-      
+
       return {
         messages: [
           {

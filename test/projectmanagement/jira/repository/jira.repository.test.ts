@@ -17,7 +17,7 @@ describe('JiraRepository', () => {
     } as Response);
 
     const result = await repository.getTicket('PRJ-123', 'testdomain', 'test@test.com', 'token123');
-    
+
     expect(global.fetch).toHaveBeenCalledWith(
       'https://testdomain.atlassian.net/rest/api/3/issue/PRJ-123',
       expect.objectContaining({
@@ -38,9 +38,9 @@ describe('JiraRepository', () => {
       text: async () => 'Issue does not exist',
     } as Response);
 
-    await expect(repository.getTicket('PRJ-999', 'testdomain', 'test@test.com', 'token123')).rejects.toThrow(
-      'Failed to fetch Jira ticket PRJ-999: Not Found - Issue does not exist',
-    );
+    await expect(
+      repository.getTicket('PRJ-999', 'testdomain', 'test@test.com', 'token123'),
+    ).rejects.toThrow('Failed to fetch Jira ticket PRJ-999: Not Found - Issue does not exist');
   });
   it('should create Jira ticket successfully', async () => {
     const mockResponse = { id: '456', key: 'PRJ-456' };
@@ -59,7 +59,7 @@ describe('JiraRepository', () => {
       'assignee123',
       'testdomain',
       'test@test.com',
-      'token123'
+      'token123',
     );
 
     expect(global.fetch).toHaveBeenCalledWith(
@@ -85,7 +85,18 @@ describe('JiraRepository', () => {
     } as Response);
 
     await expect(
-      repository.createTicket('INVALID', 'Title', 'Task', undefined, undefined, undefined, undefined, 'domain', 'email', 'token')
+      repository.createTicket(
+        'INVALID',
+        'Title',
+        'Task',
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        'domain',
+        'email',
+        'token',
+      ),
     ).rejects.toThrow('Failed to create Jira ticket: Bad Request - Invalid project');
   });
 });

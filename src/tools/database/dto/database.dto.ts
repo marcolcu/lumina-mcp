@@ -12,7 +12,10 @@ export const QueryArgumentsSchema = z.object({
 });
 
 export const ListTablesSchema = z.object({
-  databaseName: z.string().optional().describe('Optional name of the database to list tables from.'),
+  databaseName: z
+    .string()
+    .optional()
+    .describe('Optional name of the database to list tables from.'),
 });
 
 export const InspectTableSchema = z.object({

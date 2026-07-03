@@ -12,7 +12,6 @@ import {
 } from '../../dto/database.dto.js';
 
 export function registerPostgresqlController(server: McpServer) {
-  
   server.registerTool(
     'execute_postgres_query',
     {
@@ -57,7 +56,7 @@ export function registerPostgresqlController(server: McpServer) {
         const rows = await runPostgresQuery(
           "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE';",
           [],
-          databaseName
+          databaseName,
         );
         return {
           content: [
@@ -93,7 +92,7 @@ export function registerPostgresqlController(server: McpServer) {
         const rows = await runPostgresQuery(
           "SELECT column_name, data_type, is_nullable, column_default FROM information_schema.columns WHERE table_name = $1 AND table_schema = 'public';",
           [table],
-          databaseName
+          databaseName,
         );
         return {
           content: [
@@ -217,7 +216,7 @@ export function registerPostgresqlController(server: McpServer) {
           try {
             const columns = await runPostgresQuery<unknown>(
               "SELECT column_name, data_type, is_nullable, column_default FROM information_schema.columns WHERE table_name = $1 AND table_schema = 'public';",
-              [table]
+              [table],
             );
             matchedSchemas.push(
               `PostgreSQL Table: ${table}\nColumns:\n${JSON.stringify(columns, null, 2)}`,
@@ -270,8 +269,7 @@ export function registerPostgresqlController(server: McpServer) {
     async ({ command }) => {
       const promptText = AUDITOR_PG_PROMPT.replace(
         '{{command}}',
-        command ||
-          'No query provided. Please use list_postgresql_tables to discover tables first.',
+        command || 'No query provided. Please use list_postgresql_tables to discover tables first.',
       );
 
       return {

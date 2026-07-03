@@ -7,7 +7,10 @@ export class JiraRepository {
     email: string,
     apiToken: string,
   ): Promise<unknown> {
-    const cleanDomain = domain.replace(/^https?:\/\//, '').replace(/\.atlassian\.net\/?$/, '').replace(/\/$/, '');
+    const cleanDomain = domain
+      .replace(/^https?:\/\//, '')
+      .replace(/\.atlassian\.net\/?$/, '')
+      .replace(/\/$/, '');
     const url = `https://${cleanDomain}.atlassian.net/rest/api/3/issue/${issueIdOrKey}`;
     const credentials = Buffer.from(`${email}:${apiToken}`).toString('base64');
 
@@ -41,7 +44,10 @@ export class JiraRepository {
     email: string,
     apiToken: string,
   ): Promise<unknown> {
-    const cleanDomain = domain.replace(/^https?:\/\//, '').replace(/\.atlassian\.net\/?$/, '').replace(/\/$/, '');
+    const cleanDomain = domain
+      .replace(/^https?:\/\//, '')
+      .replace(/\.atlassian\.net\/?$/, '')
+      .replace(/\/$/, '');
     const url = `https://${cleanDomain}.atlassian.net/rest/api/3/issue`;
     const credentials = Buffer.from(`${email}:${apiToken}`).toString('base64');
 
@@ -88,9 +94,7 @@ export class JiraRepository {
 
     if (!response.ok) {
       const errorText = await response.text();
-      throw new Error(
-        `Failed to create Jira ticket: ${response.statusText} - ${errorText}`,
-      );
+      throw new Error(`Failed to create Jira ticket: ${response.statusText} - ${errorText}`);
     }
 
     return await response.json();
@@ -103,13 +107,16 @@ export class JiraRepository {
     email: string,
     apiToken: string,
   ): Promise<unknown> {
-    const cleanDomain = domain.replace(/^https?:\/\//, '').replace(/\.atlassian\.net\/?$/, '').replace(/\/$/, '');
+    const cleanDomain = domain
+      .replace(/^https?:\/\//, '')
+      .replace(/\.atlassian\.net\/?$/, '')
+      .replace(/\/$/, '');
     const url = `https://${cleanDomain}.atlassian.net/rest/api/3/issue/${issueKey}/attachments`;
     const credentials = Buffer.from(`${email}:${apiToken}`).toString('base64');
 
     const fileBuffer = await fs.readFile(filePath);
     const fileName = path.basename(filePath);
-    
+
     const formData = new FormData();
     const blob = new Blob([fileBuffer]);
     formData.append('file', blob, fileName);
