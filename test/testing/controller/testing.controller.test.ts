@@ -4,6 +4,7 @@ import { registerTestingController } from '../../../src/tools/testing/controller
 import {
   CREATE_UNIT_TEST_PROMPT,
   CREATE_E2E_TEST_PROMPT,
+  CREATE_INTEGRATION_TEST_PROMPT,
 } from '../../../src/tools/testing/prompts/index.js';
 
 describe('Testing Controller', () => {
@@ -32,6 +33,16 @@ describe('Testing Controller', () => {
 
     expect(mockServer.registerPrompt).toHaveBeenCalledWith(
       'create-e2e-test',
+      expect.any(Object),
+      expect.any(Function),
+    );
+  });
+
+  it('should register create-integration-test prompt', () => {
+    registerTestingController(mockServer as unknown as McpServer);
+
+    expect(mockServer.registerPrompt).toHaveBeenCalledWith(
+      'create-integration-test',
       expect.any(Object),
       expect.any(Function),
     );
@@ -92,6 +103,42 @@ describe('Testing Controller', () => {
       const expectedText = CREATE_E2E_TEST_PROMPT.replace(
         '{{context}}',
         () => 'Please paste the source code you want to test here.',
+      );
+
+      expect(result.messages[0].role).toBe('user');
+      expect(result.messages[0].content.text).toBe(expectedText);
+    });
+  });
+
+  describe('create-integration-test prompt', () => {
+    let createIntegrationTestCallback: (args: {
+      command?: string;
+    }) => Promise<{ messages: { role: string; content: { text: string } }[] }>;
+
+    beforeEach(() => {
+      registerTestingController(mockServer as unknown as McpServer);
+      // integration-test is the 3rd registered prompt (index 2)
+      createIntegrationTestCallback = mockServer.registerPrompt.mock.calls[2][2];
+    });
+
+    it('should replace {{context}} with the provided command', async () => {
+      const commandText = 'POST /api/users - Create a new user with name and email';
+      const result = await createIntegrationTestCallback({ command: commandText });
+      const expectedText = CREATE_INTEGRATION_TEST_PROMPT.replace(
+        '{{context}}',
+        () => commandText,
+      );
+
+      expect(result.messages[0].role).toBe('user');
+      expect(result.messages[0].content.text).toBe(expectedText);
+    });
+
+    it('should handle undefined command gracefully', async () => {
+      const result = await createIntegrationTestCallback({});
+      const expectedText = CREATE_INTEGRATION_TEST_PROMPT.replace(
+        '{{context}}',
+        () =>
+          'Please paste the API endpoint definitions or controller source code you want to test here.',
       );
 
       expect(result.messages[0].role).toBe('user');
