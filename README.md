@@ -132,6 +132,13 @@ In your MCP client, you can use these prompts as slash commands:
 | `create_trello_card` | Create a new Trello card in a specific list |
 | `create_openproject_work_package` | Create a new OpenProject work package with assignee and priority |
 | `create_github_issue` | Create a new GitHub issue with labels, milestone, and assignees |
+| `add_openproject_work_package_comment` | Add a comment to an existing OpenProject work package |
+| `list_clickup_tasks` | List/filter ClickUp tasks in a list by status, assignee, tag, or due date range |
+| `get_clickup_task` | Fetch full details of a ClickUp task — description, priority, assignees, custom fields |
+| `get_clickup_task_comments` | Fetch all comments on a ClickUp task, including author, date, and resolved status |
+| `create_clickup_comment` | Add a comment to a ClickUp task, optionally assigning it or notifying all watchers |
+| `update_clickup_comment` | Edit the text of an existing ClickUp comment |
+| `delete_clickup_comment` | Delete an existing ClickUp comment |
 
 **PM Prompts:**
 
@@ -239,7 +246,8 @@ Add this to your MCP client configuration (e.g. `mcp.json`, Cursor settings, Cla
         "TRELLO_API_KEY": "your-trello-key",
         "TRELLO_API_TOKEN": "your-trello-token",
         "OPENPROJECT_URL": "https://openproject.yourcompany.com",
-        "OPENPROJECT_API_KEY": "your-openproject-key"
+        "OPENPROJECT_API_KEY": "your-openproject-key",
+        "CLICKUP_API_TOKEN": "your-clickup-personal-api-token"
       }
     }
   }
@@ -261,7 +269,7 @@ Detailed guides for every tool, prompt, parameter, and usage example:
 | **[MySQL Prompts & Tools](documents/mysql-prompts.md)** | 5 MySQL tools, 2 prompts, security features, and examples |
 | **[PostgreSQL Prompts & Tools](documents/postgresql-prompts.md)** | 5 PostgreSQL tools, 2 prompts, security features, and examples |
 | **[GitHub Source Control](documents/github-prompts.md)** | 7 Git/GitHub tools, 4 prompts, and fallback strategy |
-| **[Project Management Integration](documents/projectmanagement-prompts.md)** | 3 PM tools (Jira, Trello, OpenProject), 3 AI prompts |
+| **[Project Management Integration](documents/projectmanagement-prompts.md)** | PM tools (Jira, Trello, OpenProject, GitHub, ClickUp), 4 AI prompts |
 | **[AI Orchestration](documents/orchestration-prompts.md)** | 6-Phase Orchestration Engine, native fallback strategy |
 | **[Testing Module](documents/testing-prompts.md)** | Create unit tests with Big Tech QA standards |
 

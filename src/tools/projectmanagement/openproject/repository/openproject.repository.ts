@@ -87,6 +87,36 @@ export class OpenProjectRepository {
     return await response.json();
   }
 
+  async addWorkPackageComment(
+    workPackageId: string,
+    comment: string,
+    domain: string,
+    apiKey: string,
+  ): Promise<unknown> {
+    const cleanDomain = domain.replace(/^https?:\/\//, '').replace(/\/$/, '');
+    const url = `https://${cleanDomain}/api/v3/work_packages/${workPackageId}/activities`;
+    const authHeader = 'Basic ' + Buffer.from(`apikey:${apiKey}`).toString('base64');
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+        Authorization: authHeader,
+      },
+      body: JSON.stringify({ comment: { format: 'markdown', raw: comment } }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(
+        `Failed to add comment to OpenProject work package ${workPackageId}: ${response.statusText} - ${errorText}`,
+      );
+    }
+
+    return await response.json();
+  }
+
   async attachFileToWorkPackage(
     workPackageId: string,
     filePath: string,

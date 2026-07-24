@@ -112,6 +112,50 @@ describe('Gitea Repository', () => {
       expect(result).toEqual({ html_url: `${BASE_URL}/owner/repo/pulls/1`, state: 'open' });
     });
 
+    it('should include assignees when creating a pull request', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 201,
+        json: async () => ({ html_url: `${BASE_URL}/owner/repo/pulls/1`, state: 'open' }),
+      });
+
+      await giteaRepository.createPullRequest('owner/repo', 'title', 'head', 'base', 'body', [
+        'vincentius.marco',
+      ]);
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        `${API}${GITEA_ENDPOINTS.CREATE_PR('owner/repo')}`,
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({
+            title: 'title',
+            head: 'head',
+            base: 'base',
+            body: 'body',
+            assignees: ['vincentius.marco'],
+          }),
+        }),
+      );
+    });
+
+    it('should request reviewers on a pull request', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({}),
+      });
+
+      await giteaRepository.requestReviewers('owner/repo', 1, ['gregorius.fredico']);
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        `${API}${GITEA_ENDPOINTS.PR_REQUESTED_REVIEWERS('owner/repo', 1)}`,
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({ reviewers: ['gregorius.fredico'] }),
+        }),
+      );
+    });
+
     it('should fetch a pull request diff as text', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,

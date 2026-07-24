@@ -78,6 +78,14 @@ export const CreateGiteaPRSchema = z.object({
   head: z.string().describe('The name of the branch where your changes are implemented'),
   base: z.string().describe('The name of the branch you want the changes pulled into'),
   body: z.string().describe('The contents of the pull request'),
+  assignees: z
+    .array(z.string())
+    .optional()
+    .describe('Gitea usernames to assign to the pull request'),
+  reviewers: z
+    .array(z.string())
+    .optional()
+    .describe('Gitea usernames to request a review from on the pull request'),
   baseUrl: GiteaBaseUrlSchema,
 });
 

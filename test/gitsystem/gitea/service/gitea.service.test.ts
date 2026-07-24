@@ -33,6 +33,7 @@ describe('Gitea Service', () => {
       'head',
       'base',
       'body',
+      undefined,
       'https://git.internal',
     );
     expect(mockGiteaRepository.createPullRequest).toHaveBeenCalledWith(
@@ -41,6 +42,30 @@ describe('Gitea Service', () => {
       'head',
       'base',
       'body',
+      undefined,
+      'https://git.internal',
+    );
+    expect(result).toEqual({ id: 1 });
+  });
+
+  it('should proxy createPullRequest to giteaRepository with assignees and baseUrl', async () => {
+    mockGiteaRepository.createPullRequest.mockResolvedValueOnce({ id: 1 });
+    const result = await createPullRequest(
+      'owner/repo',
+      'title',
+      'head',
+      'base',
+      'body',
+      ['vincentius.marco'],
+      'https://git.internal',
+    );
+    expect(mockGiteaRepository.createPullRequest).toHaveBeenCalledWith(
+      'owner/repo',
+      'title',
+      'head',
+      'base',
+      'body',
+      ['vincentius.marco'],
       'https://git.internal',
     );
     expect(result).toEqual({ id: 1 });

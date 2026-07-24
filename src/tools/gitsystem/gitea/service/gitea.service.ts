@@ -7,9 +7,27 @@ export async function createPullRequest(
   head: string,
   base: string,
   body: string,
+  assignees?: string[],
   baseUrl?: string,
 ): Promise<GiteaPRResponse> {
-  return await giteaRepository.createPullRequest(repository, title, head, base, body, baseUrl);
+  return await giteaRepository.createPullRequest(
+    repository,
+    title,
+    head,
+    base,
+    body,
+    assignees,
+    baseUrl,
+  );
+}
+
+export async function requestReviewers(
+  repository: string,
+  pullRequestNumber: number,
+  reviewers: string[],
+  baseUrl?: string,
+): Promise<unknown> {
+  return await giteaRepository.requestReviewers(repository, pullRequestNumber, reviewers, baseUrl);
 }
 
 export async function getPullRequestDiff(

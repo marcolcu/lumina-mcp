@@ -1,8 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const { mockGetWorkPackage, mockCreateWorkPackage } = vi.hoisted(() => ({
+const { mockGetWorkPackage, mockCreateWorkPackage, mockAddWorkPackageComment } = vi.hoisted(() => ({
   mockGetWorkPackage: vi.fn(),
   mockCreateWorkPackage: vi.fn(),
+  mockAddWorkPackageComment: vi.fn(),
 }));
 
 vi.mock(
@@ -11,6 +12,7 @@ vi.mock(
     openProjectRepository: {
       getWorkPackage: mockGetWorkPackage,
       createWorkPackage: mockCreateWorkPackage,
+      addWorkPackageComment: mockAddWorkPackageComment,
     },
   }),
 );
@@ -18,6 +20,7 @@ vi.mock(
 import {
   getOpenProjectWorkPackage,
   createOpenProjectWorkPackage,
+  addOpenProjectWorkPackageComment,
 } from '../../../../src/tools/projectmanagement/openproject/service/openproject.service.js';
 
 describe('OpenProjectService', () => {
@@ -117,6 +120,69 @@ describe('OpenProjectService', () => {
       );
       await expect(createOpenProjectWorkPackage('12', 'Subj', '')).rejects.toThrow(
         'OpenProject projectId, subject, and type are required to create a work package.',
+      );
+    });
+  });
+
+  describe('addOpenProjectWorkPackageComment', () => {
+    it('should call repository.addWorkPackageComment when arguments are valid', async () => {
+      mockAddWorkPackageComment.mockResolvedValueOnce({ id: 20 });
+
+      const result = await addOpenProjectWorkPackageComment(
+        'wp1',
+        'My comment',
+        'domain.com',
+        'mykey',
+      );
+
+      expect(mockAddWorkPackageComment).toHaveBeenCalledWith(
+        'wp1',
+        'My comment',
+        'domain.com',
+        'mykey',
+      );
+      expect(result).toEqual({ id: 20 });
+    });
+
+    it('should fallback to env variables if domain/apiKey are omitted', async () => {
+      process.env.OPENPROJECT_DOMAIN = 'envdomain.com';
+      process.env.OPENPROJECT_API_KEY = 'envkey';
+      mockAddWorkPackageComment.mockResolvedValueOnce({ id: 21 });
+
+      await addOpenProjectWorkPackageComment('wp1', 'My comment');
+
+      expect(mockAddWorkPackageComment).toHaveBeenCalledWith(
+        'wp1',
+        'My comment',
+        'envdomain.com',
+        'envkey',
+      );
+    });
+
+    it('should throw error if workPackageId or comment are missing', async () => {
+      process.env.OPENPROJECT_DOMAIN = 'envdomain.com';
+      process.env.OPENPROJECT_API_KEY = 'envkey';
+      await expect(addOpenProjectWorkPackageComment('', 'Comment')).rejects.toThrow(
+        'OpenProject workPackageId and comment are required to add a comment.',
+      );
+      await expect(addOpenProjectWorkPackageComment('wp1', '')).rejects.toThrow(
+        'OpenProject workPackageId and comment are required to add a comment.',
+      );
+    });
+
+    it('should throw error if domain is missing', async () => {
+      await expect(
+        addOpenProjectWorkPackageComment('wp1', 'Comment', undefined, 'mykey'),
+      ).rejects.toThrow(
+        'OpenProject domain is required. Provide it as an argument or set OPENPROJECT_DOMAIN.',
+      );
+    });
+
+    it('should throw error if apiKey is missing', async () => {
+      await expect(
+        addOpenProjectWorkPackageComment('wp1', 'Comment', 'domain.com', undefined),
+      ).rejects.toThrow(
+        'OpenProject apiKey is required. Provide it as an argument or set OPENPROJECT_API_KEY.',
       );
     });
   });

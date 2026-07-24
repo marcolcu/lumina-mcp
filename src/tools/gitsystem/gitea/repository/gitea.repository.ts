@@ -104,12 +104,35 @@ export class GiteaRepository {
     head: string,
     base: string,
     body: string,
+    assignees?: string[],
     baseUrl?: string,
   ): Promise<GiteaPRResponse> {
     return this.fetchFromGitea<GiteaPRResponse>(baseUrl, GITEA_ENDPOINTS.CREATE_PR(repository), {
       method: 'POST',
-      body: JSON.stringify({ title, head, base, body }),
+      body: JSON.stringify({
+        title,
+        head,
+        base,
+        body,
+        ...(assignees?.length ? { assignees } : {}),
+      }),
     });
+  }
+
+  public async requestReviewers(
+    repository: string,
+    pullRequestNumber: number,
+    reviewers: string[],
+    baseUrl?: string,
+  ): Promise<unknown> {
+    return this.fetchFromGitea<unknown>(
+      baseUrl,
+      GITEA_ENDPOINTS.PR_REQUESTED_REVIEWERS(repository, pullRequestNumber),
+      {
+        method: 'POST',
+        body: JSON.stringify({ reviewers }),
+      },
+    );
   }
 
   public async getPullRequestDiff(

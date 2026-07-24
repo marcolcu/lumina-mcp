@@ -126,6 +126,84 @@ export const CreateOpenProjectWorkPackageSchema = {
     .optional(),
 };
 
+export const AddOpenProjectWorkPackageCommentSchema = {
+  domain: z
+    .string()
+    .describe(
+      'OpenProject domain (e.g. openproject.yourcompany.com). Defaults to OPENPROJECT_DOMAIN env var if not provided.',
+    )
+    .optional(),
+  apiKey: z
+    .string()
+    .describe('OpenProject API Key. Defaults to OPENPROJECT_API_KEY env var if not provided.')
+    .optional(),
+  workPackageId: z.string().min(1).describe('OpenProject Work Package ID'),
+  comment: z.string().min(1).describe('Comment text (markdown supported) to add to the work package'),
+};
+
+export const ListClickupTasksSchema = {
+  apiToken: z
+    .string()
+    .describe('ClickUp Personal API Token. Defaults to CLICKUP_API_TOKEN env var if not provided.')
+    .optional(),
+  listId: z.string().min(1).describe('ClickUp List ID to fetch tasks from'),
+  status: z.string().describe('Filter tasks by status name (e.g., "in progress")').optional(),
+  assignee: z.string().describe('Filter tasks by assignee user ID').optional(),
+  tag: z.string().describe('Filter tasks by tag name').optional(),
+  dueDateFrom: z
+    .string()
+    .describe('Filter tasks due at or after this Unix timestamp in milliseconds')
+    .optional(),
+  dueDateTo: z
+    .string()
+    .describe('Filter tasks due at or before this Unix timestamp in milliseconds')
+    .optional(),
+};
+
+export const GetClickupTaskSchema = {
+  apiToken: z
+    .string()
+    .describe('ClickUp Personal API Token. Defaults to CLICKUP_API_TOKEN env var if not provided.')
+    .optional(),
+  taskId: z.string().min(1).describe('ClickUp Task ID'),
+};
+
+export const GetClickupTaskCommentsSchema = {
+  apiToken: z
+    .string()
+    .describe('ClickUp Personal API Token. Defaults to CLICKUP_API_TOKEN env var if not provided.')
+    .optional(),
+  taskId: z.string().min(1).describe('ClickUp Task ID to fetch comments for'),
+};
+
+export const CreateClickupCommentSchema = {
+  apiToken: z
+    .string()
+    .describe('ClickUp Personal API Token. Defaults to CLICKUP_API_TOKEN env var if not provided.')
+    .optional(),
+  taskId: z.string().min(1).describe('ClickUp Task ID to add a comment to'),
+  commentText: z.string().min(1).describe('Comment text content'),
+  assignee: z.number().int().describe('User ID to assign the comment to').optional(),
+  notifyAll: z.boolean().describe('Whether to notify all task watchers about this comment').optional(),
+};
+
+export const UpdateClickupCommentSchema = {
+  apiToken: z
+    .string()
+    .describe('ClickUp Personal API Token. Defaults to CLICKUP_API_TOKEN env var if not provided.')
+    .optional(),
+  commentId: z.string().min(1).describe('ClickUp Comment ID to update'),
+  commentText: z.string().min(1).describe('New comment text content'),
+};
+
+export const DeleteClickupCommentSchema = {
+  apiToken: z
+    .string()
+    .describe('ClickUp Personal API Token. Defaults to CLICKUP_API_TOKEN env var if not provided.')
+    .optional(),
+  commentId: z.string().min(1).describe('ClickUp Comment ID to delete'),
+};
+
 export const CreateGithubIssueSchema = {
   githubToken: z
     .string()

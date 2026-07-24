@@ -24,4 +24,6 @@ export const GITEA_ENDPOINTS = {
   PR_REVIEWS: (repository: string, index: number) => `/repos/${repository}/pulls/${index}/reviews`,
   PR_REVIEW_COMMENTS: (repository: string, index: number, reviewId: number) =>
     `/repos/${repository}/pulls/${index}/reviews/${reviewId}/comments`,
+  PR_REQUESTED_REVIEWERS: (repository: string, index: number) =>
+    `/repos/${repository}/pulls/${index}/requested_reviewers`,
 };

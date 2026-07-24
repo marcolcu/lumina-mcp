@@ -1,6 +1,6 @@
 # Project Management Integration — Prompts & Tools
 
-> **Lumina MCP** provides three tools and three prompts for integrating with popular project management systems (Jira, Trello, OpenProject) through the Model Context Protocol. This allows AI agents to directly ingest ticket requirements and build precisely what was specified.
+> **Lumina MCP** provides tools and prompts for integrating with popular project management systems (Jira, Trello, OpenProject, GitHub, ClickUp) through the Model Context Protocol. This allows AI agents to directly ingest ticket requirements and build precisely what was specified.
 
 ---
 
@@ -159,6 +159,91 @@ Create a new GitHub issue in a repository.
 | `title` | `string` | ✅ | Issue title |
 | `body` | `string` | ❌ | Markdown description for the issue |
 | `labels` | `array` | ❌ | Array of label names |
+
+---
+
+### `list_clickup_tasks`
+
+List tasks from a ClickUp list, optionally filtered by status, assignee, tag, or due date range. Returns a concise summary (id, name, status, assignee, url, due_date) — use this when browsing/filtering multiple tasks. Use `get_clickup_task` instead when you already have a specific task ID and need full details.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `listId` | `string` | ✅ | ClickUp List ID to fetch tasks from |
+| `status` | `string` | ❌ | Filter by status name (e.g., `in progress`) |
+| `assignee` | `string` | ❌ | Filter by assignee user ID |
+| `tag` | `string` | ❌ | Filter by tag name |
+| `dueDateFrom` | `string` | ❌ | Filter tasks due at/after this Unix timestamp (ms) |
+| `dueDateTo` | `string` | ❌ | Filter tasks due at/before this Unix timestamp (ms) |
+| `apiToken` | `string` | ❌ | ClickUp Personal API Token (uses env var `CLICKUP_API_TOKEN` if omitted) |
+
+> **Note:** If `CLICKUP_API_TOKEN` is set in your MCP environment config, it will be used automatically.
+
+**Returns:** Array of `{ id, name, status, assignee, url, due_date }`.
+
+---
+
+### `get_clickup_task`
+
+Fetch full details of a single ClickUp task by its ID, including description, status, priority, assignees, custom fields, and url. Use this when you already know the specific `taskId`; use `list_clickup_tasks` instead when you need to search/browse tasks within a list.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `taskId` | `string` | ✅ | ClickUp Task ID |
+| `apiToken` | `string` | ❌ | ClickUp Personal API Token (uses env var `CLICKUP_API_TOKEN` if omitted) |
+
+**Returns:** Full task object (description, status, priority, assignees, custom fields, url).
+
+---
+
+### `get_clickup_task_comments`
+
+Fetch all comments on a ClickUp task, including comment text, author, date, and resolved status.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `taskId` | `string` | ✅ | ClickUp Task ID to fetch comments for |
+| `apiToken` | `string` | ❌ | ClickUp Personal API Token (uses env var `CLICKUP_API_TOKEN` if omitted) |
+
+**Returns:** Array of `{ id, comment_text, user, date, resolved }`.
+
+---
+
+### `create_clickup_comment`
+
+Add a new comment to a ClickUp task, optionally assigning it to a user or notifying all watchers.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `taskId` | `string` | ✅ | ClickUp Task ID to add a comment to |
+| `commentText` | `string` | ✅ | Comment text content |
+| `assignee` | `number` | ❌ | User ID to assign the comment to |
+| `notifyAll` | `boolean` | ❌ | Whether to notify all task watchers |
+| `apiToken` | `string` | ❌ | ClickUp Personal API Token (uses env var `CLICKUP_API_TOKEN` if omitted) |
+
+**Returns:** `{ id, url }` of the newly created comment.
+
+---
+
+### `update_clickup_comment`
+
+Edit the text of an existing ClickUp comment by its ID.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `commentId` | `string` | ✅ | ClickUp Comment ID to update |
+| `commentText` | `string` | ✅ | New comment text content |
+| `apiToken` | `string` | ❌ | ClickUp Personal API Token (uses env var `CLICKUP_API_TOKEN` if omitted) |
+
+---
+
+### `delete_clickup_comment`
+
+Delete an existing ClickUp comment by its ID.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `commentId` | `string` | ✅ | ClickUp Comment ID to delete |
+| `apiToken` | `string` | ❌ | ClickUp Personal API Token (uses env var `CLICKUP_API_TOKEN` if omitted) |
 
 ---
 

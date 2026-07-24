@@ -95,4 +95,47 @@ describe('OpenProjectRepository', () => {
       ),
     ).rejects.toThrow('Failed to create OpenProject work package: Bad Request - Invalid project');
   });
+
+  it('should add a comment to OpenProject work package successfully', async () => {
+    const mockResponse = { id: 789, comment: { raw: 'My comment' } };
+    vi.mocked(global.fetch).mockResolvedValue({
+      ok: true,
+      json: async () => mockResponse,
+    } as Response);
+
+    const result = await repository.addWorkPackageComment(
+      '1234',
+      'My comment',
+      'test.domain.com',
+      'testapikey',
+    );
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      'https://test.domain.com/api/v3/work_packages/1234/activities',
+      expect.objectContaining({
+        method: 'POST',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          Authorization: 'Basic YXBpa2V5OnRlc3RhcGlrZXk=', // Base64 of apikey:testapikey
+        },
+        body: JSON.stringify({ comment: { format: 'markdown', raw: 'My comment' } }),
+      }),
+    );
+    expect(result).toEqual(mockResponse);
+  });
+
+  it('should throw an error if adding a comment fails', async () => {
+    vi.mocked(global.fetch).mockResolvedValue({
+      ok: false,
+      statusText: 'Not Found',
+      text: async () => 'Work package not found',
+    } as Response);
+
+    await expect(
+      repository.addWorkPackageComment('999', 'Comment', 'test.domain.com', 'testapikey'),
+    ).rejects.toThrow(
+      'Failed to add comment to OpenProject work package 999: Not Found - Work package not found',
+    );
+  });
 });

@@ -4,6 +4,7 @@ import {
   createCodeReview,
   getPRReviewComments,
   getPullRequestDiff,
+  requestReviewers,
 } from '../service/gitea.service.js';
 import {
   CreateGiteaPRSchema,
@@ -29,17 +30,37 @@ export function registerGiteaController(server: McpServer) {
     'create_gitea_pr',
     {
       description:
-        'Create a pull request on a (self-hosted) Gitea instance. Requires GITEA_BASE_URL and GITEA_TOKEN env vars, or pass "baseUrl" explicitly.',
+        'Create a pull request on a (self-hosted) Gitea instance. Requires GITEA_BASE_URL and GITEA_TOKEN env vars, or pass "baseUrl" explicitly. Optionally pass "assignees" and/or "reviewers" (Gitea usernames) to set them on creation.',
       inputSchema: CreateGiteaPRSchema,
     },
-    async ({ repository, title, head, base, body, baseUrl }) => {
+    async ({ repository, title, head, base, body, assignees, reviewers, baseUrl }) => {
       try {
-        const result = await createPullRequest(repository, title, head, base, body, baseUrl);
+        const result = await createPullRequest(
+          repository,
+          title,
+          head,
+          base,
+          body,
+          assignees,
+          baseUrl,
+        );
+
+        let reviewerWarning = '';
+        if (reviewers?.length) {
+          try {
+            await requestReviewers(repository, result.number, reviewers, baseUrl);
+          } catch (reviewerError: unknown) {
+            const message =
+              reviewerError instanceof Error ? reviewerError.message : String(reviewerError);
+            reviewerWarning = `\nWarning: PR created, but requesting reviewers failed: ${message}`;
+          }
+        }
+
         return {
           content: [
             {
               type: 'text',
-              text: `Successfully created PR: ${result.html_url}\nState: ${result.state}`,
+              text: `Successfully created PR: ${result.html_url}\nState: ${result.state}${reviewerWarning}`,
             },
           ],
         };

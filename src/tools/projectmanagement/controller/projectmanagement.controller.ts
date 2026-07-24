@@ -4,8 +4,17 @@ import { getTrelloCard, createTrelloCard } from '../trello/service/trello.servic
 import {
   getOpenProjectWorkPackage,
   createOpenProjectWorkPackage,
+  addOpenProjectWorkPackageComment,
 } from '../openproject/service/openproject.service.js';
 import { getGithubIssue, createGithubIssue } from '../github/service/github.service.js';
+import {
+  listClickupTasks,
+  getClickupTask,
+  getClickupTaskComments,
+  createClickupComment,
+  updateClickupComment,
+  deleteClickupComment,
+} from '../clickup/service/clickup.service.js';
 import {
   GetJiraTicketSchema,
   CreateJiraTicketSchema,
@@ -13,8 +22,15 @@ import {
   CreateTrelloCardSchema,
   GetOpenProjectWorkPackageSchema,
   CreateOpenProjectWorkPackageSchema,
+  AddOpenProjectWorkPackageCommentSchema,
   GetGithubIssueSchema,
   CreateGithubIssueSchema,
+  ListClickupTasksSchema,
+  GetClickupTaskSchema,
+  GetClickupTaskCommentsSchema,
+  CreateClickupCommentSchema,
+  UpdateClickupCommentSchema,
+  DeleteClickupCommentSchema,
   ProjectManagementPromptSchema,
 } from '../dto/projectmanagement.dto.js';
 import {
@@ -57,6 +73,15 @@ Follow this strict fallback order:
 1. PRIMARY: Retry providing 'githubToken' parameter directly to 'get_github_issue', or set GITHUB_TOKEN environment variable in your MCP client config.
 2. SECONDARY: If you have the official GitHub MCP server registered in your client environment, call the equivalent tool from it instead.
 3. TERTIARY: Ask the user to provide the issue contents manually (copy-paste into the conversation).
+Do NOT report failure to the user — always attempt the next fallback step.
+`;
+
+const CLICKUP_FALLBACK_INSTRUCTIONS = `
+FALLBACK REQUIRED — Lumina MCP could not authenticate with ClickUp.
+Follow this strict fallback order:
+1. PRIMARY: Retry providing the 'apiToken' parameter directly to the ClickUp tool, or set CLICKUP_API_TOKEN environment variable in your MCP client config.
+2. SECONDARY: If you have an official ClickUp MCP server registered in your client environment, call the equivalent tool from it instead.
+3. TERTIARY: Ask the user to provide the ClickUp task/comment contents manually (copy-paste into the conversation).
 Do NOT report failure to the user — always attempt the next fallback step.
 `;
 
@@ -347,6 +372,44 @@ export function registerProjectManagementController(server: McpServer) {
   );
 
   server.registerTool(
+    'add_openproject_work_package_comment',
+    {
+      description:
+        'Add a comment to an existing OpenProject work package. Credentials can be passed as parameters or auto-loaded from OPENPROJECT_DOMAIN and OPENPROJECT_API_KEY env vars. Falls back to official OpenProject MCP if credentials are not available.',
+      inputSchema: AddOpenProjectWorkPackageCommentSchema,
+    },
+    async ({ workPackageId, comment, domain, apiKey }) => {
+      try {
+        const result = await addOpenProjectWorkPackageComment(
+          workPackageId,
+          comment,
+          domain,
+          apiKey,
+        );
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        return {
+          isError: true,
+          content: [
+            {
+              type: 'text',
+              text: `OpenProject Tool Error: ${errorMessage}\n\n${OPENPROJECT_FALLBACK_INSTRUCTIONS}`,
+            },
+          ],
+        };
+      }
+    },
+  );
+
+  server.registerTool(
     'create_github_issue',
     {
       description:
@@ -388,13 +451,215 @@ export function registerProjectManagementController(server: McpServer) {
     },
   );
 
+  server.registerTool(
+    'list_clickup_tasks',
+    {
+      description:
+        'List tasks from a ClickUp list, optionally filtered by status, assignee, tag, or due date range. Returns a concise summary array (id, name, status, assignee, url, due_date) for browsing/triage. Use this when you need to find or filter multiple tasks in a list; use get_clickup_task instead when you already have a specific taskId and need full details. Credentials can be passed as a parameter or auto-loaded from CLICKUP_API_TOKEN env var.',
+      inputSchema: ListClickupTasksSchema,
+    },
+    async ({ listId, status, assignee, tag, dueDateFrom, dueDateTo, apiToken }) => {
+      try {
+        const tasks = await listClickupTasks(
+          listId,
+          { status, assignee, tag, dueDateFrom, dueDateTo },
+          apiToken,
+        );
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(tasks, null, 2),
+            },
+          ],
+        };
+      } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        return {
+          isError: true,
+          content: [
+            {
+              type: 'text',
+              text: `ClickUp Tool Error: ${errorMessage}\n\n${CLICKUP_FALLBACK_INSTRUCTIONS}`,
+            },
+          ],
+        };
+      }
+    },
+  );
+
+  server.registerTool(
+    'get_clickup_task',
+    {
+      description:
+        'Fetch full details of a single ClickUp task by its ID, including description, status, priority, assignees, custom fields, and url. Use this when you already know the specific taskId; use list_clickup_tasks instead when you need to search/browse tasks within a list. Credentials can be passed as a parameter or auto-loaded from CLICKUP_API_TOKEN env var.',
+      inputSchema: GetClickupTaskSchema,
+    },
+    async ({ taskId, apiToken }) => {
+      try {
+        const task = await getClickupTask(taskId, apiToken);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(task, null, 2),
+            },
+          ],
+        };
+      } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        return {
+          isError: true,
+          content: [
+            {
+              type: 'text',
+              text: `ClickUp Tool Error: ${errorMessage}\n\n${CLICKUP_FALLBACK_INSTRUCTIONS}`,
+            },
+          ],
+        };
+      }
+    },
+  );
+
+  server.registerTool(
+    'get_clickup_task_comments',
+    {
+      description:
+        'Fetch all comments on a ClickUp task, including comment text, author, date, and resolved status. Use this to review discussion/history on a task before summarizing or replying. Credentials can be passed as a parameter or auto-loaded from CLICKUP_API_TOKEN env var.',
+      inputSchema: GetClickupTaskCommentsSchema,
+    },
+    async ({ taskId, apiToken }) => {
+      try {
+        const comments = await getClickupTaskComments(taskId, apiToken);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(comments, null, 2),
+            },
+          ],
+        };
+      } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        return {
+          isError: true,
+          content: [
+            {
+              type: 'text',
+              text: `ClickUp Tool Error: ${errorMessage}\n\n${CLICKUP_FALLBACK_INSTRUCTIONS}`,
+            },
+          ],
+        };
+      }
+    },
+  );
+
+  server.registerTool(
+    'create_clickup_comment',
+    {
+      description:
+        'Add a new comment to a ClickUp task, optionally assigning it to a user or notifying all watchers. Credentials can be passed as a parameter or auto-loaded from CLICKUP_API_TOKEN env var.',
+      inputSchema: CreateClickupCommentSchema,
+    },
+    async ({ taskId, commentText, assignee, notifyAll, apiToken }) => {
+      try {
+        const comment = await createClickupComment(taskId, commentText, assignee, notifyAll, apiToken);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(comment, null, 2),
+            },
+          ],
+        };
+      } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        return {
+          isError: true,
+          content: [
+            {
+              type: 'text',
+              text: `ClickUp Tool Error: ${errorMessage}\n\n${CLICKUP_FALLBACK_INSTRUCTIONS}`,
+            },
+          ],
+        };
+      }
+    },
+  );
+
+  server.registerTool(
+    'update_clickup_comment',
+    {
+      description:
+        'Edit the text of an existing ClickUp comment by its ID. Credentials can be passed as a parameter or auto-loaded from CLICKUP_API_TOKEN env var.',
+      inputSchema: UpdateClickupCommentSchema,
+    },
+    async ({ commentId, commentText, apiToken }) => {
+      try {
+        const result = await updateClickupComment(commentId, commentText, apiToken);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        return {
+          isError: true,
+          content: [
+            {
+              type: 'text',
+              text: `ClickUp Tool Error: ${errorMessage}\n\n${CLICKUP_FALLBACK_INSTRUCTIONS}`,
+            },
+          ],
+        };
+      }
+    },
+  );
+
+  server.registerTool(
+    'delete_clickup_comment',
+    {
+      description:
+        'Delete an existing ClickUp comment by its ID. Credentials can be passed as a parameter or auto-loaded from CLICKUP_API_TOKEN env var.',
+      inputSchema: DeleteClickupCommentSchema,
+    },
+    async ({ commentId, apiToken }) => {
+      try {
+        const result = await deleteClickupComment(commentId, apiToken);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        return {
+          isError: true,
+          content: [
+            {
+              type: 'text',
+              text: `ClickUp Tool Error: ${errorMessage}\n\n${CLICKUP_FALLBACK_INSTRUCTIONS}`,
+            },
+          ],
+        };
+      }
+    },
+  );
+
   // Prompts
   server.registerPrompt(
     'pm_summarize_ticket',
     {
       title: 'Senior PM Summarize Ticket',
       description:
-        'Summarize a raw Jira, Trello, OpenProject, or GitHub ticket/issue as a Senior Product Manager.',
+        'Summarize a raw Jira, Trello, OpenProject, GitHub, or ClickUp ticket/issue/task as a Senior Product Manager.',
       argsSchema: ProjectManagementPromptSchema,
     },
     async ({ command }) => {
