@@ -1,10 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const { mockGetWorkPackage, mockCreateWorkPackage, mockAddWorkPackageComment } = vi.hoisted(() => ({
-  mockGetWorkPackage: vi.fn(),
-  mockCreateWorkPackage: vi.fn(),
-  mockAddWorkPackageComment: vi.fn(),
-}));
+const { mockGetWorkPackage, mockCreateWorkPackage, mockAddWorkPackageComment, mockAddTimeEntry } =
+  vi.hoisted(() => ({
+    mockGetWorkPackage: vi.fn(),
+    mockCreateWorkPackage: vi.fn(),
+    mockAddWorkPackageComment: vi.fn(),
+    mockAddTimeEntry: vi.fn(),
+  }));
 
 vi.mock(
   '../../../../src/tools/projectmanagement/openproject/repository/openproject.repository.js',
@@ -13,6 +15,7 @@ vi.mock(
       getWorkPackage: mockGetWorkPackage,
       createWorkPackage: mockCreateWorkPackage,
       addWorkPackageComment: mockAddWorkPackageComment,
+      addTimeEntry: mockAddTimeEntry,
     },
   }),
 );
@@ -21,6 +24,7 @@ import {
   getOpenProjectWorkPackage,
   createOpenProjectWorkPackage,
   addOpenProjectWorkPackageComment,
+  addOpenProjectTimeEntry,
 } from '../../../../src/tools/projectmanagement/openproject/service/openproject.service.js';
 
 describe('OpenProjectService', () => {
@@ -181,6 +185,122 @@ describe('OpenProjectService', () => {
     it('should throw error if apiKey is missing', async () => {
       await expect(
         addOpenProjectWorkPackageComment('wp1', 'Comment', 'domain.com', undefined),
+      ).rejects.toThrow(
+        'OpenProject apiKey is required. Provide it as an argument or set OPENPROJECT_API_KEY.',
+      );
+    });
+  });
+
+  describe('addOpenProjectTimeEntry', () => {
+    it('should call repository.addTimeEntry with a decimal hours value converted to ISO 8601', async () => {
+      mockAddTimeEntry.mockResolvedValueOnce({ id: 1 });
+
+      const result = await addOpenProjectTimeEntry(
+        'wp1',
+        2.5,
+        '2026-07-28',
+        'Worked on it',
+        '7',
+        'domain.com',
+        'mykey',
+      );
+
+      expect(mockAddTimeEntry).toHaveBeenCalledWith(
+        'wp1',
+        'PT2H30M',
+        '2026-07-28',
+        'domain.com',
+        'mykey',
+        'Worked on it',
+        '7',
+      );
+      expect(result).toEqual({ id: 1 });
+    });
+
+    it('should pass through an ISO 8601 duration string unchanged', async () => {
+      mockAddTimeEntry.mockResolvedValueOnce({ id: 2 });
+
+      await addOpenProjectTimeEntry('wp1', 'PT1H', '2026-07-28', undefined, undefined, 'domain.com', 'mykey');
+
+      expect(mockAddTimeEntry).toHaveBeenCalledWith(
+        'wp1',
+        'PT1H',
+        '2026-07-28',
+        'domain.com',
+        'mykey',
+        undefined,
+        undefined,
+      );
+    });
+
+    it('should default spentOn to today when omitted', async () => {
+      mockAddTimeEntry.mockResolvedValueOnce({ id: 3 });
+
+      await addOpenProjectTimeEntry('wp1', 1, undefined, undefined, undefined, 'domain.com', 'mykey');
+
+      const todayIso = new Date().toISOString().slice(0, 10);
+      expect(mockAddTimeEntry).toHaveBeenCalledWith(
+        'wp1',
+        'PT1H',
+        todayIso,
+        'domain.com',
+        'mykey',
+        undefined,
+        undefined,
+      );
+    });
+
+    it('should fallback to env variables if domain/apiKey are omitted', async () => {
+      process.env.OPENPROJECT_DOMAIN = 'envdomain.com';
+      process.env.OPENPROJECT_API_KEY = 'envkey';
+      mockAddTimeEntry.mockResolvedValueOnce({ id: 4 });
+
+      await addOpenProjectTimeEntry('wp1', 1, '2026-07-28');
+
+      expect(mockAddTimeEntry).toHaveBeenCalledWith(
+        'wp1',
+        'PT1H',
+        '2026-07-28',
+        'envdomain.com',
+        'envkey',
+        undefined,
+        undefined,
+      );
+    });
+
+    it('should throw error if workPackageId or hours are missing', async () => {
+      process.env.OPENPROJECT_DOMAIN = 'envdomain.com';
+      process.env.OPENPROJECT_API_KEY = 'envkey';
+
+      await expect(addOpenProjectTimeEntry('', 1)).rejects.toThrow(
+        'OpenProject workPackageId and hours are required to log spent time.',
+      );
+      await expect(addOpenProjectTimeEntry('wp1', '')).rejects.toThrow(
+        'OpenProject workPackageId and hours are required to log spent time.',
+      );
+    });
+
+    it('should throw error if hours is not a positive number or valid ISO duration', async () => {
+      process.env.OPENPROJECT_DOMAIN = 'envdomain.com';
+      process.env.OPENPROJECT_API_KEY = 'envkey';
+
+      await expect(addOpenProjectTimeEntry('wp1', -2)).rejects.toThrow(
+        'OpenProject hours must be a positive number or a valid ISO 8601 duration string.',
+      );
+      await expect(addOpenProjectTimeEntry('wp1', 'not-a-duration')).rejects.toThrow(
+        'OpenProject hours must be a positive number or a valid ISO 8601 duration string.',
+      );
+    });
+
+    it('should throw error if domain is missing', async () => {
+      await expect(addOpenProjectTimeEntry('wp1', 1, '2026-07-28', undefined, undefined, undefined, 'mykey')).rejects.toThrow(
+        'OpenProject domain is required. Provide it as an argument or set OPENPROJECT_DOMAIN.',
+      );
+    });
+
+    it('should throw error if apiKey is missing', async () => {
+      await expect(
+        addOpenProjectTimeEntry('wp1', 1, '2026-07-28', undefined, undefined, 'domain.com', undefined),
       ).rejects.toThrow(
         'OpenProject apiKey is required. Provide it as an argument or set OPENPROJECT_API_KEY.',
       );

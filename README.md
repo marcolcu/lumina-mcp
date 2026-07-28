@@ -133,6 +133,7 @@ In your MCP client, you can use these prompts as slash commands:
 | `create_openproject_work_package` | Create a new OpenProject work package with assignee and priority |
 | `create_github_issue` | Create a new GitHub issue with labels, milestone, and assignees |
 | `add_openproject_work_package_comment` | Add a comment to an existing OpenProject work package |
+| `add_openproject_time_entry` | Log spent time on an OpenProject work package (hours as decimal or ISO 8601 duration) |
 | `list_clickup_tasks` | List/filter ClickUp tasks in a list by status, assignee, tag, or due date range |
 | `get_clickup_task` | Fetch full details of a ClickUp task — description, priority, assignees, custom fields |
 | `get_clickup_task_comments` | Fetch all comments on a ClickUp task, including author, date, and resolved status |

@@ -148,6 +148,37 @@ Create a new OpenProject work package.
 
 ---
 
+### `add_openproject_time_entry`
+
+Log spent time on an OpenProject work package (fills the "Spent time" field). Accepts hours as a decimal number (e.g., `2.5`) or an ISO 8601 duration string (e.g., `PT2H30M`).
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `workPackageId` | `string` | ✅ | OpenProject Work Package ID to log spent time against |
+| `hours` | `number \| string` | ✅ | Decimal hours (e.g., `2.5`) or ISO 8601 duration (e.g., `PT2H30M`) |
+| `spentOn` | `string` | ❌ | Date the time was spent, `YYYY-MM-DD`. Defaults to today if omitted |
+| `comment` | `string` | ❌ | Optional comment describing the work done |
+| `activityId` | `string` | ❌ | Time entry activity ID (e.g., Development, Management). Defaults to the instance default if omitted |
+| `domain` | `string` | ✅ | OpenProject instance URL |
+| `apiKey` | `string` | ✅ | Your OpenProject API key/token |
+
+> **Note:** If `OPENPROJECT_URL` and `OPENPROJECT_API_KEY` are set in your MCP environment config, they will be used automatically.
+
+**Example:**
+```
+/mcp:lumina-mcp-local:add_openproject_time_entry
+
+workPackageId: 42
+hours: 2.5
+comment: "Implemented the API integration"
+domain: "https://openproject.yourcompany.com"
+apiKey: "your_openproject_api_key"
+```
+
+**Returns:** The created time entry object (id, hours, spentOn, work package link).
+
+---
+
 ### `create_github_issue`
 
 Create a new GitHub issue in a repository.

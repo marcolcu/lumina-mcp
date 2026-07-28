@@ -5,6 +5,7 @@ import {
   getOpenProjectWorkPackage,
   createOpenProjectWorkPackage,
   addOpenProjectWorkPackageComment,
+  addOpenProjectTimeEntry,
 } from '../openproject/service/openproject.service.js';
 import { getGithubIssue, createGithubIssue } from '../github/service/github.service.js';
 import {
@@ -23,6 +24,7 @@ import {
   GetOpenProjectWorkPackageSchema,
   CreateOpenProjectWorkPackageSchema,
   AddOpenProjectWorkPackageCommentSchema,
+  AddOpenProjectTimeEntrySchema,
   GetGithubIssueSchema,
   CreateGithubIssueSchema,
   ListClickupTasksSchema,
@@ -391,6 +393,47 @@ export function registerProjectManagementController(server: McpServer) {
             {
               type: 'text',
               text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        return {
+          isError: true,
+          content: [
+            {
+              type: 'text',
+              text: `OpenProject Tool Error: ${errorMessage}\n\n${OPENPROJECT_FALLBACK_INSTRUCTIONS}`,
+            },
+          ],
+        };
+      }
+    },
+  );
+
+  server.registerTool(
+    'add_openproject_time_entry',
+    {
+      description:
+        'Log spent time on an OpenProject work package (fills the "Spent time" field). Accepts hours as a decimal number (e.g., 2.5) or an ISO 8601 duration string (e.g., "PT2H30M"). Credentials can be passed as parameters or auto-loaded from OPENPROJECT_DOMAIN and OPENPROJECT_API_KEY env vars. Falls back to official OpenProject MCP if credentials are not available.',
+      inputSchema: AddOpenProjectTimeEntrySchema,
+    },
+    async ({ workPackageId, hours, spentOn, comment, activityId, domain, apiKey }) => {
+      try {
+        const timeEntry = await addOpenProjectTimeEntry(
+          workPackageId,
+          hours,
+          spentOn,
+          comment,
+          activityId,
+          domain,
+          apiKey,
+        );
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(timeEntry, null, 2),
             },
           ],
         };

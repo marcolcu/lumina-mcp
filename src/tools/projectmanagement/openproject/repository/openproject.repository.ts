@@ -117,6 +117,60 @@ export class OpenProjectRepository {
     return await response.json();
   }
 
+  async addTimeEntry(
+    workPackageId: string,
+    hours: string,
+    spentOn: string,
+    domain: string,
+    apiKey: string,
+    comment?: string,
+    activityId?: string,
+  ): Promise<unknown> {
+    const cleanDomain = domain.replace(/^https?:\/\//, '').replace(/\/$/, '');
+    const url = `https://${cleanDomain}/api/v3/time_entries`;
+    const authHeader = 'Basic ' + Buffer.from(`apikey:${apiKey}`).toString('base64');
+
+    const body: {
+      hours: string;
+      spentOn: string;
+      comment?: { format: string; raw: string };
+      _links: Record<string, { href: string }>;
+    } = {
+      hours,
+      spentOn,
+      _links: {
+        workPackage: { href: `/api/v3/work_packages/${workPackageId}` },
+      },
+    };
+
+    if (comment) {
+      body.comment = { format: 'markdown', raw: comment };
+    }
+
+    if (activityId) {
+      body._links.activity = { href: `/api/v3/time_entries/activities/${activityId}` };
+    }
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+        Authorization: authHeader,
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(
+        `Failed to add time entry to OpenProject work package ${workPackageId}: ${response.statusText} - ${errorText}`,
+      );
+    }
+
+    return await response.json();
+  }
+
   async attachFileToWorkPackage(
     workPackageId: string,
     filePath: string,

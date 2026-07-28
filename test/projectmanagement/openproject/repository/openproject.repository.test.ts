@@ -138,4 +138,81 @@ describe('OpenProjectRepository', () => {
       'Failed to add comment to OpenProject work package 999: Not Found - Work package not found',
     );
   });
+
+  it('should add a time entry successfully', async () => {
+    const mockResponse = { id: 55, hours: 'PT2H30M' };
+    vi.mocked(global.fetch).mockResolvedValue({
+      ok: true,
+      json: async () => mockResponse,
+    } as Response);
+
+    const result = await repository.addTimeEntry(
+      '1234',
+      'PT2H30M',
+      '2026-07-28',
+      'test.domain.com',
+      'testapikey',
+      'Worked on the ticket',
+      '7',
+    );
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      'https://test.domain.com/api/v3/time_entries',
+      expect.objectContaining({
+        method: 'POST',
+        headers: {
+          Accept: 'application/json',
+          Authorization: 'Basic YXBpa2V5OnRlc3RhcGlrZXk=', // Base64 of apikey:testapikey
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          hours: 'PT2H30M',
+          spentOn: '2026-07-28',
+          _links: {
+            workPackage: { href: '/api/v3/work_packages/1234' },
+            activity: { href: '/api/v3/time_entries/activities/7' },
+          },
+          comment: { format: 'markdown', raw: 'Worked on the ticket' },
+        }),
+      }),
+    );
+    expect(result).toEqual(mockResponse);
+  });
+
+  it('should add a time entry without optional comment/activity', async () => {
+    const mockResponse = { id: 56 };
+    vi.mocked(global.fetch).mockResolvedValue({
+      ok: true,
+      json: async () => mockResponse,
+    } as Response);
+
+    await repository.addTimeEntry('1234', 'PT1H', '2026-07-28', 'test.domain.com', 'testapikey');
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      'https://test.domain.com/api/v3/time_entries',
+      expect.objectContaining({
+        body: JSON.stringify({
+          hours: 'PT1H',
+          spentOn: '2026-07-28',
+          _links: {
+            workPackage: { href: '/api/v3/work_packages/1234' },
+          },
+        }),
+      }),
+    );
+  });
+
+  it('should throw an error if adding a time entry fails', async () => {
+    vi.mocked(global.fetch).mockResolvedValue({
+      ok: false,
+      statusText: 'Unprocessable Entity',
+      text: async () => 'Invalid activity',
+    } as Response);
+
+    await expect(
+      repository.addTimeEntry('999', 'PT1H', '2026-07-28', 'test.domain.com', 'testapikey'),
+    ).rejects.toThrow(
+      'Failed to add time entry to OpenProject work package 999: Unprocessable Entity - Invalid activity',
+    );
+  });
 });

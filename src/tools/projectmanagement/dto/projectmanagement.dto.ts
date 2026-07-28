@@ -204,6 +204,36 @@ export const DeleteClickupCommentSchema = {
   commentId: z.string().min(1).describe('ClickUp Comment ID to delete'),
 };
 
+export const AddOpenProjectTimeEntrySchema = {
+  domain: z
+    .string()
+    .describe(
+      'OpenProject domain (e.g. openproject.yourcompany.com). Defaults to OPENPROJECT_DOMAIN env var if not provided.',
+    )
+    .optional(),
+  apiKey: z
+    .string()
+    .describe('OpenProject API Key. Defaults to OPENPROJECT_API_KEY env var if not provided.')
+    .optional(),
+  workPackageId: z.string().min(1).describe('OpenProject Work Package ID to log spent time against'),
+  hours: z
+    .union([z.number().positive(), z.string().min(1)])
+    .describe(
+      'Duration spent, either a decimal number of hours (e.g., 2.5) or an ISO 8601 duration string (e.g., "PT2H30M")',
+    ),
+  spentOn: z
+    .string()
+    .describe('Date the time was spent, in YYYY-MM-DD format. Defaults to today if not provided.')
+    .optional(),
+  comment: z.string().describe('Optional comment describing the work done').optional(),
+  activityId: z
+    .string()
+    .describe(
+      'OpenProject time entry activity ID (e.g., Development, Management). Defaults to the instance default activity if not provided.',
+    )
+    .optional(),
+};
+
 export const CreateGithubIssueSchema = {
   githubToken: z
     .string()
