@@ -18,13 +18,16 @@ describe('Orchestration Service', () => {
 
     it('should return CODE_REVIEW_PROMPT for phase 4 when includeTest is true', () => {
       const result = service.getOrchestrationPhase(4, true);
-      expect(result.instructions).toContain('### Phase 4: Code Review');
+      expect(result.instructions).toContain('### Phase 4: Code Review & Security Gate');
+      expect(result.instructions).toContain('Strict Security & Defense');
     });
 
     it('should return CODE_REVIEW_PROMPT for phase 3 when includeTest is false', () => {
       const result = service.getOrchestrationPhase(3, false);
-      expect(result.instructions).toContain('### Phase 3: Code Review');
+      expect(result.instructions).toContain('### Phase 3: Code Review & Security Gate');
+      expect(result.instructions).toContain('Strict Security & Defense');
     });
+
 
     it('should return VERIFICATION_PROMPT for phase 4 when includeTest is false', () => {
       const result = service.getOrchestrationPhase(4, false);

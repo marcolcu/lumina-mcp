@@ -7,7 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.4.0] — 2026-07-30
+
+### Added
+- **Compound Engineering & Strict Security Code Review**: Refactored `AI_CODE_REVIEWER_PROMPT` in `src/tools/gitsystem/prompts/index.ts` to evaluate PRs across 5 Compound Engineering lenses (System Design, Scalability, Component Reusability, Resilience, Security) alongside strict OWASP Top 10 security checks, SQL/Command Injection defense, secret exposure scanning, Auth/ACL boundary checks, strict type safety (no `any`), and zero swallowed exceptions.
+- **Multi-File Context Pre-Gathering**: Refactored `CODE_REVIEW_PROMPT` in `src/tools/orchestration/prompts/index.ts` to mandate pre-gathering multi-file structural context, symbol definitions, and related interfaces before running code review.
+- **Unit Testing & Documentation**: Added unit test coverage for prompt content in `test/gitsystem/index.test.ts` and `test/orchestration/service/orchestration.service.test.ts`, and added architectural pattern documentation in `docs/solutions/architecture-patterns/compound-engineering-code-review-integration.md`.
+
+---
+
 ## [1.3.2] — 2026-07-03
+
 
 ### Added
 - **Gitea Integration**: Added full version control support for Gitea, including tools to create PRs (`create_gitea_pr`), fetch diffs (`get_gitea_pr_diff`), review code (`review_gitea_pr`), and fix PR reviews (`fix_gitea_pr_review`).

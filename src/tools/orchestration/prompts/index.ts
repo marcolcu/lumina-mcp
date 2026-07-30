@@ -68,13 +68,18 @@ export const TESTING_PROMPT = `### Phase {{phase}}: Unit Testing
 {{previousSummary}}
 `;
 
-export const CODE_REVIEW_PROMPT = `### Phase {{phase}}: Code Review
-1. **Initiate Review**: Use the \`ce-code-review\` tool from compound engineering to perform a code review on the newly implemented code.
-2. **Fix Issues**: If the code review yields any feedback or issues, immediately implement the fixes to address the review comments.
-3. **Completion**: Ensure all review comments are resolved before proceeding.
+export const CODE_REVIEW_PROMPT = `### Phase {{phase}}: Code Review & Security Gate
+1. **Context & Symbol Gathering**: Before starting the review, map multi-file structural context by inspecting related interfaces, imported modules, and parent components for all changed files.
+2. **Initiate Review**: Use the \`ce-code-review\` tool from compound engineering (or built-in \`AI_CODE_REVIEWER_PROMPT\` / fallback protocol) to perform a holistic code review on the newly implemented code. Ensure strict evaluation across:
+   - **Strict Security & Defense**: OWASP Top 10, Injection defense, Secret/PII exposure, Auth/ACL verification, Input sanitization.
+   - **Strict Engineering Quality**: Strict typing (no \`any\`), zero swallowed exceptions, resource leak protection.
+   - **Compound Engineering**: System design, scalability, component reusability, DRY principles.
+3. **Fix Issues**: If the code review yields any feedback or issues (especially \`[CRITICAL]\` or \`[MAJOR]\`), immediately implement the fixes to address the review comments.
+4. **Completion**: Ensure all review comments are resolved and tests pass before proceeding.
 {{tokenMode}}
 {{previousSummary}}
 `;
+
 
 export const VERIFICATION_PROMPT = `### Phase {{phase}}: Verification (Tests & Database)
 1. **Run Tests & Coverage**: Run the test scripts appropriate for the project's programming language (e.g., \`npm run test -- --coverage\` or \`yarn test\` for JS/TS, \`go test -cover\` for Go, \`mvn test\` for Java, \`pytest --cov\` for Python). Verify if the tests pass.

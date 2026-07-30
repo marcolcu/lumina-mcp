@@ -343,7 +343,7 @@
         "t2Badge": "Pull Request",
         "t2Desc": "Opens a new GitHub Pull Request. Lumina automatically generates a value-first markdown description outlining the modifications.",
         "t3Badge": "Auto Review",
-        "t3Desc": "Submits an AI-based code review to a GitHub Pull Request (approve, request changes, or comment).",
+        "t3Desc": "Submits an AI-based code review to a GitHub Pull Request using Compound Engineering principles (System Design, Scalability, Reusability) and strict OWASP security audit gates.",
         "t4Badge": "Auto Review",
         "t4Desc": "Fetches PR review comments to help the AI understand feedback and apply fixes locally.",
         "t5Badge": "Reviews",
@@ -361,7 +361,7 @@
         "p1Query": "Stage my changes and run commit push.",
         "p2Desc": "Create pull request description like a tech company, including test coverage.",
         "p2Query": "Create a PR into main for the branch feat/readonly.",
-        "p3Desc": "Provide code review directly to github based on AI.",
+        "p3Desc": "Provide a deep structural code review directly to GitHub evaluating code across Compound Engineering lenses and strict OWASP security checks.",
         "p3Query": "Review PR #42 and approve it.",
         "p4Desc": "Fetch review comments and provide instructions to automatically fix them.",
         "p4Query": "Resolve PR comments on #104."
@@ -381,7 +381,7 @@
         "p3Title": "Testing",
         "p3Desc": "Writes unit & integration tests.",
         "p4Title": "Code Review",
-        "p4Desc": "Multi-agent quality & security check.",
+        "p4Desc": "Compound Engineering structural audit & strict security gate.",
         "p5Title": "Verification",
         "p5Desc": "Builds code and verifies functionality.",
         "p6Title": "Git System",
@@ -409,7 +409,7 @@
         "f1Desc": "Asks the AI to start an interactive question-and-answer cycle, understanding technical constraints and drafting details before writing a design spec.",
         "f2Desc": "Guides the AI to document file modifications, method modifications, and API boundaries in a technical implementation sheet.",
         "f3Desc": "Forces code quality compliance: strict validation checks, error-free typing, defensive exception blocks, and zero hardcoded secrets.",
-        "f4Desc": "Checks diffs against a rigorous self-review checklist covering functional correctness, OWASP security checks, and code readability.",
+        "f4Desc": "Checks diffs against a rigorous self-review checklist covering system design, component reusability, OWASP security checks, strict typing, and zero swallowed exceptions.",
         "f5Desc": "Instructs the AI to persist solved software patterns and technical designs in markdown format inside <0>docs/solutions/</0> directories for compounding workspace knowledge."
       }
     },
