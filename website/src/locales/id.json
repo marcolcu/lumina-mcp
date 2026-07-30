@@ -368,8 +368,9 @@
       }
     },
     "orchestration": {
-      "badge": "Documentation",
+      "badge": "Dokumentasi",
       "title": "AI Orchestration & Lifecycles",
+
       "subtitle": "Pahami dan manfaatkan Siklus Pengembangan Orkestrasi yang didukung oleh Lumina MCP dan Compound Engineering.",
       "workflowTitle": "Workflow Orkestrasi Engineering",
       "workflowDesc": "Lumina MCP mengoordinasikan modifikasi kode yang kompleks dengan membagi workflow menjadi fase deterministik. Ini memastikan agen menghasilkan karya berkualitas tinggi, mendokumentasikan keputusan desain, dan melakukan loop peninjauan mandiri secara iteratif.",
