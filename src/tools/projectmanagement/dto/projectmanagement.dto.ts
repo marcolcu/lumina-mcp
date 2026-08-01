@@ -141,3 +141,44 @@ export const CreateGithubIssueSchema = {
   assignees: z.array(z.string()).describe('Array of assignee usernames').optional(),
   milestone: z.number().int().describe('Milestone number').optional(),
 };
+
+export const GetJiraTicketCommentsSchema = {
+  domain: z
+    .string()
+    .describe(
+      'Jira domain prefix (e.g. yourcompany for yourcompany.atlassian.net). Defaults to JIRA_DOMAIN env var if not provided.',
+    )
+    .optional(),
+  email: z
+    .string()
+    .describe('Jira email address. Defaults to JIRA_EMAIL env var if not provided.')
+    .optional(),
+  apiToken: z
+    .string()
+    .describe('Jira API token. Defaults to JIRA_API_TOKEN env var if not provided.')
+    .optional(),
+  issueIdOrKey: z.string().describe('Jira Issue ID or Key (e.g., PRJ-1234)'),
+  startAt: z
+    .number()
+    .int()
+    .describe('The index of the first item to return in a page of results')
+    .optional(),
+  maxResults: z.number().int().describe('The maximum number of items to return per page').optional(),
+};
+
+export const GetOpenProjectWorkPackageCommentsSchema = {
+  domain: z
+    .string()
+    .describe(
+      'OpenProject domain (e.g. openproject.yourcompany.com). Defaults to OPENPROJECT_DOMAIN env var if not provided.',
+    )
+    .optional(),
+  apiKey: z
+    .string()
+    .describe('OpenProject API Key. Defaults to OPENPROJECT_API_KEY env var if not provided.')
+    .optional(),
+  workPackageId: z.string().describe('OpenProject Work Package ID'),
+  offset: z.number().int().describe('Page number or offset for pagination').optional(),
+  pageSize: z.number().int().describe('Number of elements per page').optional(),
+};
+

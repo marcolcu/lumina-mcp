@@ -139,6 +139,44 @@ export class JiraRepository {
 
     return await response.json();
   }
+
+  async getTicketComments(
+    issueIdOrKey: string,
+    domain: string,
+    email: string,
+    apiToken: string,
+    startAt?: number,
+    maxResults?: number,
+  ): Promise<unknown> {
+    const cleanDomain = domain
+      .replace(/^https?:\/\//, '')
+      .replace(/\.atlassian\.net\/?$/, '')
+      .replace(/\/$/, '');
+    const queryParams = new URLSearchParams();
+    if (startAt !== undefined) queryParams.append('startAt', startAt.toString());
+    if (maxResults !== undefined) queryParams.append('maxResults', maxResults.toString());
+    const queryString = queryParams.toString() ? `?${queryParams.toString()}` : '';
+
+    const url = `https://${cleanDomain}.atlassian.net/rest/api/3/issue/${issueIdOrKey}/comment${queryString}`;
+    const credentials = Buffer.from(`${email}:${apiToken}`).toString('base64');
+
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        Authorization: `Basic ${credentials}`,
+        Accept: 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(
+        `Failed to fetch Jira ticket comments for ${issueIdOrKey}: ${response.statusText} - ${errorText}`,
+      );
+    }
+
+    return await response.json();
+  }
 }
 
 export const jiraRepository = new JiraRepository();

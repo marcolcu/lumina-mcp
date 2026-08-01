@@ -33,6 +33,21 @@ apiToken: "your_api_token_here"
 
 ---
 
+### `get_jira_ticket_comments`
+
+Fetch comments and activity history for a Jira ticket/issue by its ID or Key.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `issueIdOrKey` | `string` | ✅ | Jira issue ID or Key (e.g., `PROJ-123`) |
+| `domain` | `string` | ❌ | Jira workspace domain (e.g., `yourcompany`) |
+| `email` | `string` | ❌ | Email associated with your Jira account |
+| `apiToken` | `string` | ❌ | Your Jira API token |
+| `startAt` | `number` | ❌ | Index of the first item to return for pagination |
+| `maxResults` | `number` | ❌ | Maximum number of items to return per page |
+
+---
+
 ### `get_trello_card`
 
 Fetch a Trello card by its ID or shortlink, including description, status, checklist items, and comment history.
@@ -82,6 +97,21 @@ apiKey: "your_openproject_api_key"
 **Returns:** Subject, description, type, status, priority, assignee, due date, and activity/comments.
 
 ---
+
+### `get_openproject_work_package_comments`
+
+Fetch comments, reviews, and activity history for an OpenProject work package by its ID.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `workPackageId` | `string` | ✅ | OpenProject work package ID |
+| `domain` | `string` | ❌ | OpenProject domain |
+| `apiKey` | `string` | ❌ | OpenProject API Key |
+| `offset` | `number` | ❌ | Page number / offset for pagination |
+| `pageSize` | `number` | ❌ | Number of elements per page |
+
+---
+
 
 ### `get_github_issue`
 
@@ -256,6 +286,30 @@ Generate a production-grade, highly structured ticket body based on raw context 
 - A direct recommendation with precise arguments to call the relevant `create_*` tool.
 
 ---
+
+### `dev_check_comment`
+
+> **Title:** Developer Check Comments and Reviews
+
+Fetch and review comments, activity logs, and review feedback for a ticket or issue (Jira, OpenProject, GitHub, Trello). The AI acts as a Senior Developer extracting key decisions, unresolved questions, and next steps from ticket discussions.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `command` | `string` | ❌ | Ticket ID/Key or natural language context (e.g. `PRJ-123` or `#42`) |
+
+**Example:**
+```
+/dev_check_comment command="Check comments and review status for Jira ticket PRJ-123"
+```
+
+**Output includes:**
+- Ticket & Discussion Overview
+- Key Decisions & Requirements Updates
+- Open Questions & Action Items
+- Recommended Next Steps
+
+---
+
 
 ## 🔗 Integration with Orchestration
 

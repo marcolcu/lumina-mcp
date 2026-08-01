@@ -10,7 +10,7 @@
     "github": "GitHub"
   },
   "hero": {
-    "versionBadge": "AI MCP Server & Workflows v1.3.2",
+    "versionBadge": "AI MCP Server & Workflows v1.4.1",
     "heading1": "Give Your AI Assistant",
     "heading2": "Real Developer Superpowers",
     "subtitle": "Provide your AI agents with direct access to your developer environment. Execute database queries, streamline Git workflows, track Jira boards, and orchestrate complex tasks safely.",
@@ -73,6 +73,7 @@
       "brainstorm": "Brainstorm technical approach and create a plan based on the ticket summary.",
       "test": "Generate comprehensive test catalog based on the ticket and technical plan.",
       "create": "Digest raw feature requests and structure them into Big Tech-standard tickets.",
+      "devCheckComment": "Analyze comments, activity logs, and reviewer feedback on Jira, OpenProject, GitHub Issues, or Trello tickets as a Senior Software Developer.",
       "p4QueryJira": "Create a bug ticket for login page in Jira.",
       "p4QueryTrello": "Create a card in Trello todo list about registration form.",
       "p4QueryOpenProject": "Create a task in OpenProject for setting up database.",
@@ -304,7 +305,9 @@
         "t5Desc": "Creates a new Jira issue with labels, priority, and attachments.",
         "t6Desc": "Creates a new Trello card in a specific list.",
         "t7Desc": "Creates a new OpenProject work package with assignee and priority.",
-        "t8Desc": "Creates a new GitHub issue with labels, milestone, and assignees."
+        "t8Desc": "Creates a new GitHub issue with labels, milestone, and assignees.",
+        "t9Desc": "Fetches comment threads and activity history for a specific Jira ticket.",
+        "t10Desc": "Fetches comment threads and activity history for a specific OpenProject work package."
       },
       "promptsTitle": "PM Prompts",
       "promptsDesc": "Lumina MCP also exposes pre-configured prompts to quickly trigger complex AI workflows. You can use these prompts directly in your AI client chat.",
@@ -320,7 +323,9 @@
         "p4QueryJira": "Create a bug ticket for login page in Jira.",
         "p4QueryTrello": "Create a card in Trello todo list about registration form.",
         "p4QueryOpenProject": "Create a task in OpenProject for setting up database.",
-        "p4QueryGithub": "Create a github issue about fixing the memory leak."
+        "p4QueryGithub": "Create a github issue about fixing the memory leak.",
+        "p5Desc": "Analyze comments, activity logs, and reviewer feedback on tickets (Jira, OpenProject, GitHub, Trello) as a Senior Software Developer.",
+        "p5Query": "Review comments and discussions on Jira ticket PRJ-100."
       }
     },
     "versionControl": {

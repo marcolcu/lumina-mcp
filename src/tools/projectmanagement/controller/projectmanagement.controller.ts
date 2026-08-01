@@ -1,17 +1,20 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { getJiraTicket, createJiraTicket } from '../jira/service/jira.service.js';
+import { getJiraTicket, createJiraTicket, getJiraTicketComments } from '../jira/service/jira.service.js';
 import { getTrelloCard, createTrelloCard } from '../trello/service/trello.service.js';
 import {
   getOpenProjectWorkPackage,
   createOpenProjectWorkPackage,
+  getOpenProjectWorkPackageComments,
 } from '../openproject/service/openproject.service.js';
 import { getGithubIssue, createGithubIssue } from '../github/service/github.service.js';
 import {
   GetJiraTicketSchema,
+  GetJiraTicketCommentsSchema,
   CreateJiraTicketSchema,
   GetTrelloCardSchema,
   CreateTrelloCardSchema,
   GetOpenProjectWorkPackageSchema,
+  GetOpenProjectWorkPackageCommentsSchema,
   CreateOpenProjectWorkPackageSchema,
   GetGithubIssueSchema,
   CreateGithubIssueSchema,
@@ -22,6 +25,7 @@ import {
   PM_BRAINSTORM_PLAN_PROMPT,
   PM_TEST_CATALOG_PROMPT,
   PM_CREATE_TICKET_PROMPT,
+  PM_DEV_CHECK_COMMENT_PROMPT,
 } from '../prompts/index.js';
 
 const JIRA_FALLBACK_INSTRUCTIONS = `
@@ -96,6 +100,46 @@ export function registerProjectManagementController(server: McpServer) {
   );
 
   server.registerTool(
+    'get_jira_ticket_comments',
+    {
+      description:
+        'Fetch comments and activity history for a Jira ticket/issue by its ID or Key. Credentials can be passed as parameters or auto-loaded from JIRA_DOMAIN, JIRA_EMAIL, JIRA_API_TOKEN env vars.',
+      inputSchema: GetJiraTicketCommentsSchema,
+    },
+    async ({ issueIdOrKey, domain, email, apiToken, startAt, maxResults }) => {
+      try {
+        const comments = await getJiraTicketComments(
+          issueIdOrKey,
+          domain,
+          email,
+          apiToken,
+          startAt,
+          maxResults,
+        );
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(comments, null, 2),
+            },
+          ],
+        };
+      } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        return {
+          isError: true,
+          content: [
+            {
+              type: 'text',
+              text: `Jira Tool Error: ${errorMessage}\n\n${JIRA_FALLBACK_INSTRUCTIONS}`,
+            },
+          ],
+        };
+      }
+    },
+  );
+
+  server.registerTool(
     'get_trello_card',
     {
       description:
@@ -143,6 +187,45 @@ export function registerProjectManagementController(server: McpServer) {
             {
               type: 'text',
               text: JSON.stringify(wp, null, 2),
+            },
+          ],
+        };
+      } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        return {
+          isError: true,
+          content: [
+            {
+              type: 'text',
+              text: `OpenProject Tool Error: ${errorMessage}\n\n${OPENPROJECT_FALLBACK_INSTRUCTIONS}`,
+            },
+          ],
+        };
+      }
+    },
+  );
+
+  server.registerTool(
+    'get_openproject_work_package_comments',
+    {
+      description:
+        'Fetch comments, reviews, and activity history for an OpenProject work package by its ID. Credentials can be passed as parameters or auto-loaded from OPENPROJECT_DOMAIN and OPENPROJECT_API_KEY env vars.',
+      inputSchema: GetOpenProjectWorkPackageCommentsSchema,
+    },
+    async ({ workPackageId, domain, apiKey, offset, pageSize }) => {
+      try {
+        const comments = await getOpenProjectWorkPackageComments(
+          workPackageId,
+          domain,
+          apiKey,
+          offset,
+          pageSize,
+        );
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(comments, null, 2),
             },
           ],
         };
@@ -485,6 +568,35 @@ export function registerProjectManagementController(server: McpServer) {
         'Markdown (GitHub/OpenProject) / ADF (Jira) / Plain text (Trello) - Please determine from context or use Markdown as default',
       );
 
+      return {
+        messages: [
+          {
+            role: 'user' as const,
+            content: {
+              type: 'text' as const,
+              text: promptText,
+            },
+          },
+        ],
+      };
+    },
+  );
+
+  server.registerPrompt(
+    'dev_check_comment',
+    {
+      title: 'Developer Check Comments and Reviews',
+      description:
+        'Fetch and review comments, activity logs, and review feedback for a ticket/issue (Jira, OpenProject, GitHub, Trello) to extract key decisions and unresolved feedback.',
+      argsSchema: ProjectManagementPromptSchema,
+    },
+    async ({ command }) => {
+      const promptText = PM_DEV_CHECK_COMMENT_PROMPT.replace(
+        '{{context}}',
+        () =>
+          command ||
+          'No ticket ID or context provided. Please specify the ticket/issue key or ID (e.g., PRJ-123 or OpenProject #42 or GitHub owner/repo#issue).',
+      );
       return {
         messages: [
           {

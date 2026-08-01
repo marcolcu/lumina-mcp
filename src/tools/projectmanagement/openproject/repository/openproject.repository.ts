@@ -122,6 +122,40 @@ export class OpenProjectRepository {
 
     return await response.json();
   }
+
+  async getWorkPackageComments(
+    workPackageId: string,
+    domain: string,
+    apiKey: string,
+    offset?: number,
+    pageSize?: number,
+  ): Promise<unknown> {
+    const cleanDomain = domain.replace(/^https?:\/\//, '').replace(/\/$/, '');
+    const queryParams = new URLSearchParams();
+    if (offset !== undefined) queryParams.append('offset', offset.toString());
+    if (pageSize !== undefined) queryParams.append('pageSize', pageSize.toString());
+    const queryString = queryParams.toString() ? `?${queryParams.toString()}` : '';
+
+    const url = `https://${cleanDomain}/api/v3/work_packages/${workPackageId}/activities${queryString}`;
+    const authHeader = 'Basic ' + Buffer.from(`apikey:${apiKey}`).toString('base64');
+
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        Accept: 'application/json',
+        Authorization: authHeader,
+      },
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(
+        `Failed to fetch OpenProject work package comments for ${workPackageId}: ${response.statusText} - ${errorText}`,
+      );
+    }
+
+    return await response.json();
+  }
 }
 
 export const openProjectRepository = new OpenProjectRepository();

@@ -1,9 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const { mockGetWorkPackage, mockCreateWorkPackage } = vi.hoisted(() => ({
-  mockGetWorkPackage: vi.fn(),
-  mockCreateWorkPackage: vi.fn(),
-}));
+const { mockGetWorkPackage, mockCreateWorkPackage, mockGetWorkPackageComments } = vi.hoisted(
+  () => ({
+    mockGetWorkPackage: vi.fn(),
+    mockCreateWorkPackage: vi.fn(),
+    mockGetWorkPackageComments: vi.fn(),
+  }),
+);
 
 vi.mock(
   '../../../../src/tools/projectmanagement/openproject/repository/openproject.repository.js',
@@ -11,6 +14,7 @@ vi.mock(
     openProjectRepository: {
       getWorkPackage: mockGetWorkPackage,
       createWorkPackage: mockCreateWorkPackage,
+      getWorkPackageComments: mockGetWorkPackageComments,
     },
   }),
 );
@@ -18,6 +22,7 @@ vi.mock(
 import {
   getOpenProjectWorkPackage,
   createOpenProjectWorkPackage,
+  getOpenProjectWorkPackageComments,
 } from '../../../../src/tools/projectmanagement/openproject/service/openproject.service.js';
 
 describe('OpenProjectService', () => {
@@ -118,6 +123,23 @@ describe('OpenProjectService', () => {
       await expect(createOpenProjectWorkPackage('12', 'Subj', '')).rejects.toThrow(
         'OpenProject projectId, subject, and type are required to create a work package.',
       );
+    });
+  });
+
+  describe('getOpenProjectWorkPackageComments', () => {
+    it('should call repository.getWorkPackageComments when arguments are valid', async () => {
+      mockGetWorkPackageComments.mockResolvedValueOnce({ _embedded: { elements: [] } });
+
+      const result = await getOpenProjectWorkPackageComments('wp1', 'domain.com', 'mykey', 1, 20);
+
+      expect(mockGetWorkPackageComments).toHaveBeenCalledWith('wp1', 'domain.com', 'mykey', 1, 20);
+      expect(result).toEqual({ _embedded: { elements: [] } });
+    });
+
+    it('should throw error if domain is missing', async () => {
+      await expect(
+        getOpenProjectWorkPackageComments('wp1', undefined, 'mykey'),
+      ).rejects.toThrow('OpenProject domain is required');
     });
   });
 });

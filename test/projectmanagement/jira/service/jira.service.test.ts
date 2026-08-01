@@ -1,20 +1,23 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const { mockGetTicket, mockCreateTicket } = vi.hoisted(() => ({
+const { mockGetTicket, mockCreateTicket, mockGetTicketComments } = vi.hoisted(() => ({
   mockGetTicket: vi.fn(),
   mockCreateTicket: vi.fn(),
+  mockGetTicketComments: vi.fn(),
 }));
 
 vi.mock('../../../../src/tools/projectmanagement/jira/repository/jira.repository.js', () => ({
   jiraRepository: {
     getTicket: mockGetTicket,
     createTicket: mockCreateTicket,
+    getTicketComments: mockGetTicketComments,
   },
 }));
 
 import {
   getJiraTicket,
   createJiraTicket,
+  getJiraTicketComments,
 } from '../../../../src/tools/projectmanagement/jira/service/jira.service.js';
 
 describe('JiraService', () => {
@@ -125,6 +128,30 @@ describe('JiraService', () => {
       await expect(createJiraTicket('PRJ', 'Title', '')).rejects.toThrow(
         'Jira projectKey, summary, and issueType are required to create a ticket.',
       );
+    });
+  });
+
+  describe('getJiraTicketComments', () => {
+    it('should call repository.getTicketComments when arguments are valid', async () => {
+      mockGetTicketComments.mockResolvedValueOnce({ comments: [] });
+
+      const result = await getJiraTicketComments('PRJ-1', 'mydomain', 'myemail', 'mytoken', 0, 10);
+
+      expect(mockGetTicketComments).toHaveBeenCalledWith(
+        'PRJ-1',
+        'mydomain',
+        'myemail',
+        'mytoken',
+        0,
+        10,
+      );
+      expect(result).toEqual({ comments: [] });
+    });
+
+    it('should throw error if domain is missing', async () => {
+      await expect(
+        getJiraTicketComments('PRJ-1', undefined, 'myemail', 'mytoken'),
+      ).rejects.toThrow('Jira domain is required');
     });
   });
 });

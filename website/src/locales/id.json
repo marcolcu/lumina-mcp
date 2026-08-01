@@ -10,7 +10,7 @@
     "github": "GitHub"
   },
   "hero": {
-    "versionBadge": "AI MCP Server & Workflows v1.3.2",
+    "versionBadge": "AI MCP Server & Workflows v1.4.1",
     "heading1": "Berdayakan AI Assistant Anda dengan",
     "heading2": "Superpower Developer",
     "subtitle": "Berikan agen AI Anda akses langsung dan aman ke environment development. Eksekusi query database, otomatisasi workflow Git, sinkronkan tiket Jira, dan jalankan task programming kompleks dengan mudah.",
@@ -73,6 +73,7 @@
       "brainstorm": "Brainstorming pendekatan teknikal dan buat rencana berdasarkan ringkasan tiket.",
       "test": "Hasilkan katalog pengujian komprehensif berdasarkan tiket dan rencana teknis.",
       "create": "Mencerna permintaan fitur mentah dan menyusunnya menjadi tiket berstandar Big Tech.",
+      "devCheckComment": "Analisis komentar, log aktivitas, dan ulasan pada tiket Jira, OpenProject, GitHub Issues, atau Trello selayaknya Senior Software Developer.",
       "p4QueryJira": "Buat tiket bug untuk halaman login di Jira.",
       "p4QueryTrello": "Buat card di daftar todo Trello tentang form registrasi.",
       "p4QueryOpenProject": "Buat task di OpenProject untuk setup database.",
@@ -304,7 +305,9 @@
         "t5Desc": "Membuat tiket Jira baru dengan label, prioritas, dan lampiran.",
         "t6Desc": "Membuat kartu Trello baru di daftar spesifik.",
         "t7Desc": "Membuat work package OpenProject baru dengan penerima tugas dan prioritas.",
-        "t8Desc": "Membuat issue GitHub baru dengan label, milestone, dan penerima tugas."
+        "t8Desc": "Membuat issue GitHub baru dengan label, milestone, dan penerima tugas.",
+        "t9Desc": "Mengambil komentar dan riwayat aktivitas tiket Jira spesifik.",
+        "t10Desc": "Mengambil komentar dan aktivitas work package OpenProject spesifik."
       },
       "promptsTitle": "PM Prompts",
       "promptsDesc": "Lumina MCP juga menyediakan prompt pra-konfigurasi untuk memicu workflow AI yang kompleks dengan cepat. Anda dapat menggunakan prompt ini secara langsung di chat AI client Anda.",
@@ -320,7 +323,9 @@
         "p4QueryJira": "Buat tiket bug untuk halaman login di Jira.",
         "p4QueryTrello": "Buat card di daftar todo Trello tentang form registrasi.",
         "p4QueryOpenProject": "Buat task di OpenProject untuk setup database.",
-        "p4QueryGithub": "Buat issue github tentang perbaikan memory leak."
+        "p4QueryGithub": "Buat issue github tentang perbaikan memory leak.",
+        "p5Desc": "Menganalisis komentar, log aktivitas, dan ulasan tiket (Jira, OpenProject, GitHub, Trello) selayaknya Senior Software Developer.",
+        "p5Query": "Review comments and discussions on Jira ticket PRJ-100."
       }
     },
     "versionControl": {

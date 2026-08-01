@@ -125,8 +125,10 @@ In your MCP client, you can use these prompts as slash commands:
 | Tool | Description |
 |------|-------------|
 | `get_jira_ticket` | Fetch a Jira issue by ID/Key — includes title, description, labels, comments, epic |
+| `get_jira_ticket_comments` | Fetch comments and activity history for a Jira issue by ID/Key |
 | `get_trello_card` | Fetch a Trello card — includes description, status, checklist, comment history |
 | `get_openproject_work_package` | Fetch an OpenProject work package — includes assignee, priority, and comments |
+| `get_openproject_work_package_comments` | Fetch comments, reviews, and activity history for an OpenProject work package |
 | `get_github_issue` | Fetch a GitHub issue — includes body, comments, labels, milestones, and linked PRs |
 | `create_jira_ticket` | Create a new Jira issue with labels, priority, and attachments |
 | `create_trello_card` | Create a new Trello card in a specific list |
@@ -141,6 +143,7 @@ In your MCP client, you can use these prompts as slash commands:
 | `pm_brainstorm_plan` | Brainstorm technical approach and create a step-by-step implementation plan |
 | `pm_test_catalog` | Generate a comprehensive test catalog based on the ticket and technical plan |
 | `pm_create_ticket` | Digest raw feature requests and structure them into Big Tech-standard tickets |
+| `dev_check_comment` | Fetch and analyze comments, activity logs, and review feedback on tickets |
 
 **Example Prompts:**
 In your MCP client, you can use these prompts as slash commands:

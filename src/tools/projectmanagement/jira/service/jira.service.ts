@@ -84,3 +84,36 @@ export async function createJiraTicket(
 
   return ticket;
 }
+
+export async function getJiraTicketComments(
+  issueIdOrKey: string,
+  domain?: string,
+  email?: string,
+  apiToken?: string,
+  startAt?: number,
+  maxResults?: number,
+): Promise<unknown> {
+  const finalDomain = domain || process.env.JIRA_DOMAIN;
+  const finalEmail = email || process.env.JIRA_EMAIL;
+  const finalToken = apiToken || process.env.JIRA_API_TOKEN;
+
+  if (!finalDomain) {
+    throw new Error('Jira domain is required. Provide it as an argument or set JIRA_DOMAIN.');
+  }
+
+  if (!finalEmail || !finalToken) {
+    throw new Error(
+      'Jira email and apiToken are required for authentication. Provide them as arguments or set JIRA_EMAIL and JIRA_API_TOKEN.',
+    );
+  }
+
+  return await jiraRepository.getTicketComments(
+    issueIdOrKey,
+    finalDomain,
+    finalEmail,
+    finalToken,
+    startAt,
+    maxResults,
+  );
+}
+

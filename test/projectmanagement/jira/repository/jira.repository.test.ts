@@ -99,4 +99,39 @@ describe('JiraRepository', () => {
       ),
     ).rejects.toThrow('Failed to create Jira ticket: Bad Request - Invalid project');
   });
+
+  it('should fetch Jira ticket comments successfully', async () => {
+    const mockResponse = { comments: [{ id: 'c1', body: 'Looks good' }], total: 1 };
+    vi.mocked(global.fetch).mockResolvedValue({
+      ok: true,
+      json: async () => mockResponse,
+    } as Response);
+
+    const result = await repository.getTicketComments('PRJ-123', 'testdomain', 'test@test.com', 'token123');
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      'https://testdomain.atlassian.net/rest/api/3/issue/PRJ-123/comment',
+      expect.objectContaining({
+        method: 'GET',
+        headers: {
+          Authorization: `Basic ${Buffer.from('test@test.com:token123').toString('base64')}`,
+          Accept: 'application/json',
+        },
+      }),
+    );
+    expect(result).toEqual(mockResponse);
+  });
+
+  it('should throw an error if fetch ticket comments fails', async () => {
+    vi.mocked(global.fetch).mockResolvedValue({
+      ok: false,
+      statusText: 'Forbidden',
+      text: async () => 'Access denied',
+    } as Response);
+
+    await expect(
+      repository.getTicketComments('PRJ-123', 'testdomain', 'test@test.com', 'token123'),
+    ).rejects.toThrow('Failed to fetch Jira ticket comments for PRJ-123: Forbidden - Access denied');
+  });
 });
+

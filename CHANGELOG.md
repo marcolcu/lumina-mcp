@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.1] — 2026-08-01
+
+### Added
+- **Jira & OpenProject Comment Tools**: Added `get_jira_ticket_comments` and `get_openproject_work_package_comments` tools to retrieve comment threads, review activities, and history for Jira tickets and OpenProject work packages.
+- **Developer Comment Review Prompt**: Added `dev_check_comment` prompt to analyze ticket comments and activity logs across Jira, OpenProject, GitHub Issues, and Trello, summarizing key decisions, action items, and recommended next steps.
+
+### Fixed
+- **Type Safety in Tests**: Resolved `'devCheckCall' is possibly 'undefined'` strict nullability warning in `test/projectmanagement/controller/projectmanagement.controller.test.ts`.
+
 ---
 
 ## [1.4.0] — 2026-07-30

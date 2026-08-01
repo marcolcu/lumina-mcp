@@ -1,6 +1,6 @@
 {
   "name": "lumina-mcp",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "description": "Unified MCP toolkit for engineering workflows, database connections, and source control",
   "keywords": [
     "mcp",

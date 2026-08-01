@@ -51,6 +51,11 @@ export function PMSection() {
         `/pm_create_ticket "${t('pm.prompts.p4QueryOpenProject')}"`,
         `/pm_create_ticket "${t('pm.prompts.p4QueryGithub')}"`
       ]
+    },
+    {
+      name: "/dev_check_comment",
+      desc: t('pm.prompts.devCheckComment'),
+      cmd: '/dev_check_comment "Analyze discussions and review comments on Jira ticket PRJ-100."'
     }
   ]
 
