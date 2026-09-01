@@ -27,6 +27,39 @@ export class OpenProjectRepository {
     return await response.json();
   }
 
+  async listMyWorkPackages(status: string, domain: string, apiKey: string): Promise<unknown> {
+    const cleanDomain = domain.replace(/^https?:\/\//, '').replace(/\/$/, '');
+    const authHeader = 'Basic ' + Buffer.from(`apikey:${apiKey}`).toString('base64');
+
+    const filters: Array<Record<string, { operator: string; values?: string[] }>> = [
+      { assignee: { operator: '=', values: ['me'] } },
+    ];
+    if (status !== 'all') {
+      filters.push({ status: { operator: status === 'closed' ? 'c' : 'o' } });
+    }
+
+    const url = `https://${cleanDomain}/api/v3/work_packages?filters=${encodeURIComponent(
+      JSON.stringify(filters),
+    )}`;
+
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        Accept: 'application/json',
+        Authorization: authHeader,
+      },
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(
+        `Failed to list OpenProject work packages assigned to me: ${response.statusText} - ${errorText}`,
+      );
+    }
+
+    return await response.json();
+  }
+
   async createWorkPackage(
     projectId: string,
     subject: string,

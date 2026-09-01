@@ -31,6 +31,13 @@ build({
     console.log('Copied skills folder to dist/skills');
   }
 
+  // Bundle installable Agent Skills alongside runtime fallback prompts.
+  const installableSkillsDir = path.join('skills');
+  if (fs.existsSync(installableSkillsDir)) {
+    fs.cpSync(installableSkillsDir, skillsDistDir, { recursive: true });
+    console.log('Copied installable Agent Skills to dist/skills');
+  }
+
   console.log('Production build completed successfully!');
   console.log('Output generated at dist/index.js');
 }).catch((error: unknown) => {

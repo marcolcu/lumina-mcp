@@ -41,7 +41,7 @@ export function registerGithubController(server: McpServer) {
     'generate_commit_and_push',
     {
       description:
-        'Generate a commit message based on local changes, commit, and push to GitHub. If GITHUB_TOKEN env var is not set, the tool falls back to git CLI commands automatically.',
+        'Use only when the user explicitly asks to commit and push the current local changes. Do not use for inspecting or merely drafting a commit message. Falls back to git CLI commands when GITHUB_TOKEN is unavailable.',
       inputSchema: GenerateCommitSchema,
     },
     async ({ branch, commitMessage, diff, files }) => {
@@ -75,7 +75,7 @@ export function registerGithubController(server: McpServer) {
     'create_github_pr',
     {
       description:
-        'Create a pull request to GitHub. Falls back to official GitHub MCP or gh CLI if GITHUB_TOKEN is not configured.',
+        'Use when the user explicitly wants to publish a GitHub pull request from a prepared branch. Do not use when they only want a draft description or local review. Falls back to official GitHub MCP or gh CLI.',
       inputSchema: CreatePRSchema,
     },
     async ({ repository, title, head, base, body }) => {
@@ -108,7 +108,7 @@ export function registerGithubController(server: McpServer) {
     'review_github_pr',
     {
       description:
-        'Submit an AI-based code review to a GitHub Pull Request. Falls back to official GitHub MCP or gh CLI if GITHUB_TOKEN is not configured.',
+        'Use when the user asks to submit review findings to an existing GitHub pull request. Do not use for a local-only code review. Falls back to official GitHub MCP or gh CLI.',
       inputSchema: ReviewPRSchema,
     },
     async ({ repository, pullRequestNumber, event, body, comments }) => {
@@ -141,7 +141,7 @@ export function registerGithubController(server: McpServer) {
     'fix_github_pr_review',
     {
       description:
-        'Fetch PR review comments to help the AI apply fixes locally. Falls back to official GitHub MCP if GITHUB_TOKEN is not configured.',
+        'Use when an existing GitHub PR already has review comments and the user wants those comments addressed locally. Do not use for pre-emptive review. Falls back to official GitHub MCP.',
       inputSchema: FixPRSchema,
     },
     async ({ repository, pullRequestNumber }) => {
@@ -175,7 +175,7 @@ export function registerGithubController(server: McpServer) {
     'get_github_pr_diff',
     {
       description:
-        'Fetch the diff of a GitHub Pull Request. Falls back to official GitHub MCP or gh CLI if GITHUB_TOKEN is not configured.',
+        'Use when analysis depends on the authoritative diff of an existing GitHub PR, especially when its branch is not checked out. Prefer local git diff for uncommitted workspace changes. Falls back to official GitHub MCP or gh CLI.',
       inputSchema: GetPRDiffSchema,
     },
     async ({ repository, pullRequestNumber }) => {
@@ -208,7 +208,7 @@ export function registerGithubController(server: McpServer) {
     'reply_to_pr_comment',
     {
       description:
-        'Reply to an inline comment in a GitHub pull request review. Falls back to official GitHub MCP if GITHUB_TOKEN is not configured.',
+        'Use when the user wants to post a remote reply to a specific inline GitHub review comment, normally after addressing it. Do not use for local notes. Falls back to official GitHub MCP.',
       inputSchema: ReplyToPRCommentSchema,
     },
     async ({ repository, pullRequestNumber, commentId, body }) => {
@@ -241,7 +241,7 @@ export function registerGithubController(server: McpServer) {
     'resolve_pr_review_thread',
     {
       description:
-        'Resolve a GitHub pull request review thread using its comment node_id. Falls back to official GitHub MCP if GITHUB_TOKEN is not configured.',
+        'Use only after a GitHub review thread has been addressed and the user wants it marked resolved. Requires the comment node_id and falls back to official GitHub MCP.',
       inputSchema: ResolvePRThreadSchema,
     },
     async ({ repository, pullRequestNumber, commentNodeId }) => {

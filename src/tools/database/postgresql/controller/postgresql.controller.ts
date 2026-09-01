@@ -16,7 +16,7 @@ export function registerPostgresqlController(server: McpServer) {
     'execute_postgres_query',
     {
       description:
-        'Execute an SQL query against the PostgreSQL database. Safe parameters binding is supported.',
+        'Use when the answer requires live PostgreSQL data and a read-only query is already known. Prefer this over guessing from migrations or reading application code; do not use it for writes. Safe parameter binding is supported.',
       inputSchema: QueryArgumentsSchema,
     },
     async ({ query, parameters, databaseName }) => {
@@ -48,7 +48,8 @@ export function registerPostgresqlController(server: McpServer) {
   server.registerTool(
     'list_postgresql_tables',
     {
-      description: 'Show list of tables in the PostgreSQL database.',
+      description:
+        'Use when the PostgreSQL schema is unknown and you need to discover available tables before writing a query. Prefer this over guessing table names.',
       inputSchema: ListTablesSchema,
     },
     async ({ databaseName }) => {
@@ -84,7 +85,8 @@ export function registerPostgresqlController(server: McpServer) {
   server.registerTool(
     'inspect_postgresql_table',
     {
-      description: 'Inspect PostgreSQL table structure (columns, types, nullability, defaults).',
+      description:
+        'Use before querying an unfamiliar PostgreSQL table to inspect columns, types, nullability, and defaults. Prefer this over manually querying system catalogs.',
       inputSchema: InspectTableSchema,
     },
     async ({ table, databaseName }) => {
@@ -120,7 +122,8 @@ export function registerPostgresqlController(server: McpServer) {
   server.registerTool(
     'analyze_postgresql_query',
     {
-      description: 'Analyze a PostgreSQL SELECT query using EXPLAIN with Senior DB Auditor report.',
+      description:
+        'Use when diagnosing a slow or risky PostgreSQL SELECT, choosing indexes, or validating a query plan. This runs EXPLAIN and returns a Senior DB Auditor report; use execute_postgres_query instead when you only need query results.',
       inputSchema: AnalyzeQuerySchema,
     },
     async ({ query, databaseName }) => {
@@ -156,7 +159,8 @@ export function registerPostgresqlController(server: McpServer) {
   server.registerTool(
     'save_audit_report_pg',
     {
-      description: 'Save an AI-generated audit report to the docs/database directory.',
+      description:
+        'Use after completing a PostgreSQL audit when the user wants a durable Markdown artifact. Do not call for ordinary query output; it saves the supplied report under docs/database.',
       inputSchema: SaveAuditReportSchema,
     },
     async ({ reportContent }) => {

@@ -241,12 +241,12 @@ Add this to your MCP client configuration (e.g. `mcp.json`, Cursor settings, Cla
         "GITHUB_TOKEN": "your-github-personal-access-token",
         "GITEA_BASE_URL": "https://gitea.example.com:3000",
         "GITEA_TOKEN": "your-gitea-access-token",
-        "JIRA_URL": "https://yourcompany.atlassian.net",
+        "JIRA_DOMAIN": "yourcompany",
         "JIRA_EMAIL": "your.email@company.com",
         "JIRA_API_TOKEN": "your-jira-token",
         "TRELLO_API_KEY": "your-trello-key",
         "TRELLO_API_TOKEN": "your-trello-token",
-        "OPENPROJECT_URL": "https://openproject.yourcompany.com",
+        "OPENPROJECT_DOMAIN": "openproject.yourcompany.com",
         "OPENPROJECT_API_KEY": "your-openproject-key",
         "CLICKUP_API_TOKEN": "your-clickup-personal-api-token"
       }
@@ -256,6 +256,74 @@ Add this to your MCP client configuration (e.g. `mcp.json`, Cursor settings, Cla
 ```
 
 > **You only need to include the environment variables for the integrations you use.** If you already have the official [Atlassian MCP](https://github.com/atlassian/mcp) or [GitHub MCP](https://github.com/github/mcp) installed, Lumina MCP will automatically use them as a fallback.
+
+### Transports
+
+Local clients use `stdio` by default, so existing configuration does not need to change:
+
+```bash
+npx -y lumina-mcp
+```
+
+#### Codex
+
+Codex CLI, the Codex IDE extension, and the ChatGPT desktop app share MCP configuration. Add
+Lumina as a local `stdio` server with:
+
+```bash
+codex mcp add lumina-mcp -- npx -y lumina-mcp
+```
+
+To pass integration credentials, keep them in Codex's `~/.codex/config.toml` instead of putting
+secrets in command arguments:
+
+```toml
+[mcp_servers.lumina-mcp]
+command = "npx"
+args = ["-y", "lumina-mcp"]
+
+[mcp_servers.lumina-mcp.env]
+MYSQL_URL = "mysql://user:password@localhost:3306/db_name"
+POSTGRES_URL = "postgres://user:password@localhost:5432/db_name"
+GITHUB_TOKEN = "your-github-personal-access-token"
+```
+
+Verify the connection with `codex mcp list`, then restart Codex if it was already running. For a
+project-only setup, put the same table in `.codex/config.toml` inside a trusted project.
+
+For a shared or CI endpoint, opt into stateless Streamable HTTP and provide an API key:
+
+```bash
+npx -y lumina-mcp --transport http --host 127.0.0.1 --port 3000 --api-key "$LUMINA_MCP_API_KEY"
+```
+
+The endpoint is `POST /mcp`. Clients must send the key as `Authorization: Bearer <api-key>`. The `--api-key` flag takes precedence, while the `LUMINA_MCP_API_KEY` environment variable avoids exposing the key in process arguments. HTTP mode rejects startup when neither is provided.
+
+### Install the Lumina skill
+
+Install for every detected assistant in your user profile:
+
+```bash
+npx -y lumina-mcp install
+```
+
+Install only for the current project, or select platforms explicitly:
+
+```bash
+npx -y lumina-mcp install --project
+npx -y lumina-mcp install --platform claude --platform codex
+npx -y lumina-mcp install --platform all
+```
+
+Supported platform names are `claude`, `codex`, `cursor`, and `gemini`. Claude Code and Gemini receive the complete Agent Skill directory, Cursor receives an always-applied `.mdc` rule, and Codex receives a marked section in `AGENTS.md`.
+
+Remove every installation recorded by Lumina:
+
+```bash
+npx -y lumina-mcp uninstall
+```
+
+Use `uninstall --project` to remove only the installation for the current project. The installer refuses to overwrite an existing same-named skill or rule that is not recorded in Lumina's install manifest.
 
 For detailed, client-specific installation guides (Antigravity IDE, Cursor, Claude Code, VS Code, Codex), visit **[Lumina MCP Documentation](https://wahyu-labs.github.io/lumina-mcp/)**.
 
@@ -282,7 +350,12 @@ Lumina MCP follows a clean, layered architecture:
 
 ```
 src/
-├── index.ts                          # MCP server entry point
+├── index.ts                          # Backward-compatible CLI entry point
+├── lumina/
+│   ├── core/                         # Pure, MCP-independent domain logic
+│   └── mcp/
+│       ├── mcp_server.ts             # MCP server factory
+│       └── transports/               # stdio and Streamable HTTP
 └── tools/
     ├── database/
     │   ├── mysql/

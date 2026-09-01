@@ -12,7 +12,8 @@ export function registerOrchestrationController(server: McpServer) {
   server.registerTool(
     'get_orchestration_phase',
     {
-      description: 'Get instructions for a specific orchestration phase (1-6).',
+      description:
+        'Use only while executing the Lumina orchestration workflow to fetch the instructions for its next phase. Do not use for ordinary one-step coding questions or to skip directly to a later phase.',
       inputSchema: GetOrchestrationPhaseSchema,
     },
     async ({ phase, includeTest, tokenBudget, previousPhaseSummary }) => {

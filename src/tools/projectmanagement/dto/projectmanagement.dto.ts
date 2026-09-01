@@ -44,6 +44,23 @@ export const GetOpenProjectWorkPackageSchema = {
   workPackageId: z.string().describe('OpenProject Work Package ID'),
 };
 
+export const GetMyOpenProjectWorkPackagesSchema = {
+  domain: z
+    .string()
+    .describe(
+      'OpenProject domain (e.g. openproject.yourcompany.com). Defaults to OPENPROJECT_DOMAIN env var if not provided.',
+    )
+    .optional(),
+  apiKey: z
+    .string()
+    .describe('OpenProject API Key. Defaults to OPENPROJECT_API_KEY env var if not provided.')
+    .optional(),
+  status: z
+    .enum(['open', 'closed', 'all'])
+    .describe('Filter by status. Defaults to "open".')
+    .optional(),
+};
+
 export const GetGithubIssueSchema = {
   owner: z.string().describe('GitHub repository owner (user or organization)'),
   repo: z.string().describe('GitHub repository name'),

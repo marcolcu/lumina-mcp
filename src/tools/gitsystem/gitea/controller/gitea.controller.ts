@@ -30,7 +30,7 @@ export function registerGiteaController(server: McpServer) {
     'create_gitea_pr',
     {
       description:
-        'Create a pull request on a (self-hosted) Gitea instance. Requires GITEA_BASE_URL and GITEA_TOKEN env vars, or pass "baseUrl" explicitly. Optionally pass "assignees" and/or "reviewers" (Gitea usernames) to set them on creation.',
+        'Use when the user explicitly wants to publish a pull request on a self-hosted Gitea instance. Do not use when they only want a draft description or local review. Requires GITEA_BASE_URL and GITEA_TOKEN, or an explicit baseUrl.',
       inputSchema: CreateGiteaPRSchema,
     },
     async ({ repository, title, head, base, body, assignees, reviewers, baseUrl }) => {
@@ -83,7 +83,7 @@ export function registerGiteaController(server: McpServer) {
     'get_gitea_pr_diff',
     {
       description:
-        'Fetch the unified diff of a Gitea Pull Request. Requires GITEA_BASE_URL and GITEA_TOKEN env vars, or pass "baseUrl" explicitly.',
+        'Use when analysis depends on the authoritative unified diff of an existing Gitea pull request, especially when its branch is not checked out. Prefer local git diff for workspace changes.',
       inputSchema: GetGiteaPRDiffSchema,
     },
     async ({ repository, pullRequestNumber, baseUrl }) => {
@@ -116,7 +116,7 @@ export function registerGiteaController(server: McpServer) {
     'review_gitea_pr',
     {
       description:
-        'Submit an AI-based code review to a Gitea Pull Request. Requires GITEA_BASE_URL and GITEA_TOKEN env vars, or pass "baseUrl" explicitly.',
+        'Use when the user asks to submit review findings to an existing Gitea pull request. Do not use for a local-only code review. Requires GITEA_BASE_URL and GITEA_TOKEN, or an explicit baseUrl.',
       inputSchema: ReviewGiteaPRSchema,
     },
     async ({ repository, pullRequestNumber, event, body, comments, baseUrl }) => {
@@ -156,7 +156,7 @@ export function registerGiteaController(server: McpServer) {
     'fix_gitea_pr_review',
     {
       description:
-        'Fetch Gitea PR review comments to help the AI apply fixes locally. Requires GITEA_BASE_URL and GITEA_TOKEN env vars, or pass "baseUrl" explicitly.',
+        'Use when an existing Gitea PR already has review comments and the user wants those comments addressed locally. Do not use for pre-emptive review.',
       inputSchema: FixGiteaPRSchema,
     },
     async ({ repository, pullRequestNumber, baseUrl }) => {

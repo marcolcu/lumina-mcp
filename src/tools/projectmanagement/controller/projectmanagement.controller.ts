@@ -3,6 +3,7 @@ import { getJiraTicket, createJiraTicket } from '../jira/service/jira.service.js
 import { getTrelloCard, createTrelloCard } from '../trello/service/trello.service.js';
 import {
   getOpenProjectWorkPackage,
+  getMyOpenProjectWorkPackages,
   createOpenProjectWorkPackage,
   addOpenProjectWorkPackageComment,
   addOpenProjectTimeEntry,
@@ -22,6 +23,7 @@ import {
   GetTrelloCardSchema,
   CreateTrelloCardSchema,
   GetOpenProjectWorkPackageSchema,
+  GetMyOpenProjectWorkPackagesSchema,
   CreateOpenProjectWorkPackageSchema,
   AddOpenProjectWorkPackageCommentSchema,
   AddOpenProjectTimeEntrySchema,
@@ -93,7 +95,7 @@ export function registerProjectManagementController(server: McpServer) {
     'get_jira_ticket',
     {
       description:
-        'Fetch a Jira ticket/issue by its ID or Key. Credentials can be passed as parameters or auto-loaded from JIRA_DOMAIN, JIRA_EMAIL, JIRA_API_TOKEN env vars. Falls back to official Atlassian MCP if credentials are not available.',
+        'Use when work references a specific Jira key and you need the authoritative requirements, comments, or status before planning or coding. Prefer this over searching local files for copied ticket text. Credentials may be passed or loaded from the environment.',
       inputSchema: GetJiraTicketSchema,
     },
     async ({ issueIdOrKey, domain, email, apiToken }) => {
@@ -126,7 +128,7 @@ export function registerProjectManagementController(server: McpServer) {
     'get_trello_card',
     {
       description:
-        'Fetch a Trello card by its ID or shortlink. Credentials can be passed as parameters or auto-loaded from TRELLO_API_KEY and TRELLO_API_TOKEN env vars. Falls back to official Atlassian/Trello MCP if credentials are not available.',
+        'Use when work references a specific Trello card ID or shortlink and you need its current description, checklist, or discussion before acting. Prefer this over stale copied notes.',
       inputSchema: GetTrelloCardSchema,
     },
     async ({ cardId, apiKey, apiToken }) => {
@@ -159,7 +161,7 @@ export function registerProjectManagementController(server: McpServer) {
     'get_openproject_work_package',
     {
       description:
-        'Fetch an OpenProject work package by its ID. Credentials can be passed as parameters or auto-loaded from OPENPROJECT_DOMAIN and OPENPROJECT_API_KEY env vars. Falls back to official OpenProject MCP if credentials are not available.',
+        'Use when work references a specific OpenProject work package and you need its authoritative requirements, status, assignee, or comments before acting. Prefer this over stale copied notes.',
       inputSchema: GetOpenProjectWorkPackageSchema,
     },
     async ({ workPackageId, domain, apiKey }) => {
@@ -189,10 +191,43 @@ export function registerProjectManagementController(server: McpServer) {
   );
 
   server.registerTool(
+    'get_my_openproject_work_packages',
+    {
+      description:
+        'Use when the user needs to discover or triage OpenProject work assigned to them and no specific work-package ID is known. Use get_openproject_work_package instead for full details of one known item.',
+      inputSchema: GetMyOpenProjectWorkPackagesSchema,
+    },
+    async ({ status, domain, apiKey }) => {
+      try {
+        const wps = await getMyOpenProjectWorkPackages(status, domain, apiKey);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(wps, null, 2),
+            },
+          ],
+        };
+      } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        return {
+          isError: true,
+          content: [
+            {
+              type: 'text',
+              text: `OpenProject Tool Error: ${errorMessage}\n\n${OPENPROJECT_FALLBACK_INSTRUCTIONS}`,
+            },
+          ],
+        };
+      }
+    },
+  );
+
+  server.registerTool(
     'get_github_issue',
     {
       description:
-        'Fetch a GitHub issue with enriched context by repository owner, name, and issue number. Returns structured data including issue details, comments, labels, assignees, milestone, and linked pull requests. Fetches comments and timeline events in parallel for performance. Credentials can be passed as parameters or auto-loaded from GITHUB_TOKEN or GITHUB_PERSONAL_ACCESS_TOKEN env vars. Falls back to official GitHub MCP if credentials are not available.',
+        'Use when work references a specific GitHub issue and you need its authoritative body, comments, labels, milestone, or linked PRs before planning or coding. Prefer this over searching local files for copied issue text.',
       inputSchema: GetGithubIssueSchema,
     },
     async ({ owner, repo, issueNumber, githubToken }) => {
@@ -224,7 +259,7 @@ export function registerProjectManagementController(server: McpServer) {
     'create_jira_ticket',
     {
       description:
-        'Create a Jira ticket/issue. Compatible with Compound Engineering (ce-plan, ce-work, ce-code-review) tracker-defer system as a ticket creation sink. Credentials can be passed as parameters or auto-loaded from JIRA_DOMAIN, JIRA_EMAIL, JIRA_API_TOKEN env vars. Falls back to official Atlassian MCP if credentials are not available.',
+        'Use only when the user explicitly asks to create a Jira issue or has approved publishing a prepared ticket. Do not call while merely drafting or brainstorming ticket content.',
       inputSchema: CreateJiraTicketSchema,
     },
     async ({
@@ -281,7 +316,7 @@ export function registerProjectManagementController(server: McpServer) {
     'create_trello_card',
     {
       description:
-        'Create a Trello card. Compatible with Compound Engineering (ce-plan, ce-work, ce-code-review) tracker-defer system as a ticket creation sink. Credentials can be passed as parameters or auto-loaded from TRELLO_API_KEY and TRELLO_API_TOKEN env vars. Falls back to official Atlassian/Trello MCP if credentials are not available.',
+        'Use only when the user explicitly asks to create a Trello card or has approved publishing prepared card content. Do not call while merely drafting or brainstorming.',
       inputSchema: CreateTrelloCardSchema,
     },
     async ({ idList, name, desc, pos, due, idLabels, idMembers, apiKey, apiToken }) => {
@@ -324,7 +359,7 @@ export function registerProjectManagementController(server: McpServer) {
     'create_openproject_work_package',
     {
       description:
-        'Create an OpenProject work package. Compatible with Compound Engineering (ce-plan, ce-work, ce-code-review) tracker-defer system as a ticket creation sink. Credentials can be passed as parameters or auto-loaded from OPENPROJECT_DOMAIN and OPENPROJECT_API_KEY env vars. Falls back to official OpenProject MCP if credentials are not available.',
+        'Use only when the user explicitly asks to create an OpenProject work package or has approved publishing prepared requirements. Do not call while merely drafting.',
       inputSchema: CreateOpenProjectWorkPackageSchema,
     },
     async ({
@@ -377,7 +412,7 @@ export function registerProjectManagementController(server: McpServer) {
     'add_openproject_work_package_comment',
     {
       description:
-        'Add a comment to an existing OpenProject work package. Credentials can be passed as parameters or auto-loaded from OPENPROJECT_DOMAIN and OPENPROJECT_API_KEY env vars. Falls back to official OpenProject MCP if credentials are not available.',
+        'Use only when the user explicitly wants to publish a comment to an existing OpenProject work package. Do not use for local notes or an unapproved draft.',
       inputSchema: AddOpenProjectWorkPackageCommentSchema,
     },
     async ({ workPackageId, comment, domain, apiKey }) => {
@@ -415,7 +450,7 @@ export function registerProjectManagementController(server: McpServer) {
     'add_openproject_time_entry',
     {
       description:
-        'Log spent time on an OpenProject work package (fills the "Spent time" field). Accepts hours as a decimal number (e.g., 2.5) or an ISO 8601 duration string (e.g., "PT2H30M"). Credentials can be passed as parameters or auto-loaded from OPENPROJECT_DOMAIN and OPENPROJECT_API_KEY env vars. Falls back to official OpenProject MCP if credentials are not available.',
+        'Use only when the user explicitly asks to record spent time on an OpenProject work package. Accepts decimal hours or an ISO 8601 duration; do not infer or submit time without confirmation.',
       inputSchema: AddOpenProjectTimeEntrySchema,
     },
     async ({ workPackageId, hours, spentOn, comment, activityId, domain, apiKey }) => {
@@ -456,7 +491,7 @@ export function registerProjectManagementController(server: McpServer) {
     'create_github_issue',
     {
       description:
-        'Create a GitHub issue. Compatible with Compound Engineering (ce-plan, ce-work, ce-code-review) tracker-defer system as a ticket creation sink. Credentials can be passed as parameters or auto-loaded from GITHUB_TOKEN or GITHUB_PERSONAL_ACCESS_TOKEN env vars. Falls back to official GitHub MCP if credentials are not available.',
+        'Use only when the user explicitly asks to create a GitHub issue or has approved publishing prepared issue content. Do not call while merely drafting or brainstorming.',
       inputSchema: CreateGithubIssueSchema,
     },
     async ({ owner, repo, title, body, labels, assignees, milestone, githubToken }) => {
@@ -601,7 +636,7 @@ export function registerProjectManagementController(server: McpServer) {
     'create_clickup_comment',
     {
       description:
-        'Add a new comment to a ClickUp task, optionally assigning it to a user or notifying all watchers. Credentials can be passed as a parameter or auto-loaded from CLICKUP_API_TOKEN env var.',
+        'Use only when the user explicitly wants to publish a new comment on a ClickUp task. Supports assignment and watcher notification; do not use for local notes or an unapproved draft.',
       inputSchema: CreateClickupCommentSchema,
     },
     async ({ taskId, commentText, assignee, notifyAll, apiToken }) => {
@@ -634,7 +669,7 @@ export function registerProjectManagementController(server: McpServer) {
     'update_clickup_comment',
     {
       description:
-        'Edit the text of an existing ClickUp comment by its ID. Credentials can be passed as a parameter or auto-loaded from CLICKUP_API_TOKEN env var.',
+        'Use only when the user explicitly wants to replace the text of an existing ClickUp comment by ID. Fetch context first when the intended comment is ambiguous.',
       inputSchema: UpdateClickupCommentSchema,
     },
     async ({ commentId, commentText, apiToken }) => {
@@ -667,7 +702,7 @@ export function registerProjectManagementController(server: McpServer) {
     'delete_clickup_comment',
     {
       description:
-        'Delete an existing ClickUp comment by its ID. Credentials can be passed as a parameter or auto-loaded from CLICKUP_API_TOKEN env var.',
+        'Use only when the user explicitly asks to delete a specific ClickUp comment by ID. This is destructive; do not infer deletion from a request to edit or resolve discussion.',
       inputSchema: DeleteClickupCommentSchema,
     },
     async ({ commentId, apiToken }) => {

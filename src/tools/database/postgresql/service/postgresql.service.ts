@@ -1,38 +1,10 @@
 import { executePostgresQuery } from '../repository/postgresql.repository.js';
-import { filterSensitiveColumns, detectSqlInjection } from '../../utils/security.js';
+import { filterSensitiveColumns } from '../../utils/security.js';
+import { assertReadOnlyQuery } from '../../../../lumina/core/database/index.js';
 import { PostgresQueryAnalysisResult } from '../../types/database.types.js';
 
 export function validateReadOnlyPostgresQuery(query: string): void {
-  detectSqlInjection(query);
-  const cleanQuery = query.trim().toLowerCase();
-
-  // Must be SELECT or other read-only statement.
-  const allowedPrefixes = ['select', 'show', 'describe', 'explain', 'with'];
-  const hasAllowedPrefix = allowedPrefixes.some((prefix) => cleanQuery.startsWith(prefix));
-  if (!hasAllowedPrefix) {
-    throw new Error('Only SELECT or read-only queries are allowed.');
-  }
-
-  // Explicitly forbid modifying operations anywhere in the query to prevent multi-statements/injection
-  const forbiddenKeywords = [
-    'insert',
-    'update',
-    'delete',
-    'drop',
-    'alter',
-    'create',
-    'truncate',
-    'replace',
-  ];
-  const hasForbiddenKeyword = forbiddenKeywords.some((keyword) => {
-    const regex = new RegExp(`\\b${keyword}\\b`, 'i');
-    return regex.test(cleanQuery);
-  });
-  if (hasForbiddenKeyword) {
-    throw new Error(
-      'Queries containing INSERT, UPDATE, DELETE, or other modifying operations are not allowed.',
-    );
-  }
+  assertReadOnlyQuery(query);
 }
 
 export async function runPostgresQuery<T>(

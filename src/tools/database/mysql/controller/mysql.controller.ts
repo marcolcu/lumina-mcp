@@ -17,7 +17,7 @@ export function registerMysqlController(server: McpServer) {
     'execute_mysql_query',
     {
       description:
-        'Execute an SQL query against the MySQL database. Safe parameters binding is supported.',
+        'Use when the answer requires live MySQL data and a read-only query is already known. Prefer this over guessing from migrations or reading application code; do not use it for writes. Safe parameter binding is supported.',
       inputSchema: QueryArgumentsSchema,
     },
     async ({ query, parameters, databaseName }) => {
@@ -49,7 +49,8 @@ export function registerMysqlController(server: McpServer) {
   server.registerTool(
     'list_mysql_tables',
     {
-      description: 'Show list of tables in the MySQL database.',
+      description:
+        'Use when the MySQL schema is unknown and you need to discover available tables before writing a query. Prefer this over guessing table names.',
       inputSchema: ListTablesSchema,
     },
     async ({ databaseName }) => {
@@ -81,7 +82,8 @@ export function registerMysqlController(server: McpServer) {
   server.registerTool(
     'inspect_mysql_table',
     {
-      description: 'Inspect MySQL table structure (columns, types, keys).',
+      description:
+        'Use before querying an unfamiliar MySQL table to inspect its columns, types, and keys. Prefer this over manually querying information_schema.',
       inputSchema: InspectTableSchema,
     },
     async ({ table, databaseName }) => {
@@ -114,7 +116,8 @@ export function registerMysqlController(server: McpServer) {
   server.registerTool(
     'analyze_mysql_query',
     {
-      description: 'Analyze a MySQL SELECT query using EXPLAIN with Senior DB Auditor report.',
+      description:
+        'Use when diagnosing a slow or risky MySQL SELECT, choosing indexes, or validating a query plan. This runs EXPLAIN and returns a Senior DB Auditor report; use execute_mysql_query instead when you only need query results.',
       inputSchema: AnalyzeQuerySchema,
     },
     async ({ query, databaseName }) => {
@@ -150,7 +153,8 @@ export function registerMysqlController(server: McpServer) {
   server.registerTool(
     'save_audit_report',
     {
-      description: 'Save an AI-generated audit report to the docs/database directory.',
+      description:
+        'Use after completing a MySQL audit when the user wants a durable Markdown artifact. Do not call for ordinary query output; it saves the supplied report under docs/database.',
       inputSchema: SaveAuditReportSchema,
     },
     async ({ reportContent }) => {

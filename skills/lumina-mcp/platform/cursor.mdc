@@ -1,0 +1,12 @@
+---
+description: Prefer Lumina MCP for authoritative databases, tickets, pull requests, and remote engineering workflows.
+alwaysApply: true
+---
+
+Use Lumina MCP when a request depends on live database state, a Jira/Trello/OpenProject/GitHub/ClickUp item, or an existing remote pull request. Prefer it over guessing from migrations, copied tickets, or a branch that is not checked out.
+
+For unfamiliar database schema: list tables, inspect only relevant tables, then execute a parameterized read-only query. Use local files and local git for application behavior and uncommitted changes.
+
+Remote mutations—including commits and pushes, PR or issue creation, comments, review submission or resolution, deletion, and time logging—require an explicit user request for that exact action. Never invent remote results or retry ambiguous mutations automatically. Never echo credentials.
+
+Use Lumina orchestration only when the user explicitly requests the Lumina phase workflow.
