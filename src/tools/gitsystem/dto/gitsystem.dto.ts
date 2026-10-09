@@ -114,6 +114,12 @@ export const FixGiteaPRSchema = z.object({
   baseUrl: GiteaBaseUrlSchema,
 });
 
+export const AutoApproveGiteaPRSchema = z.object({
+  repository: z.string().describe('Repository name in format owner/repo'),
+  pullRequestNumber: z.number().describe('The number of the pull request to auto-approve'),
+  baseUrl: GiteaBaseUrlSchema,
+});
+
 export const GetGiteaPRDiffSchema = z.object({
   repository: z.string().describe('Repository name in format owner/repo'),
   pullRequestNumber: z.number().describe('The number of the pull request to get the diff for'),

@@ -25,8 +25,8 @@ vi.mock('../../../src/tools/database/postgresql/service/postgresql.service.js', 
 }));
 
 // Mock mysql repository for actual database call simulations during service testing
-vi.mock('../../../src/tools/database/mysql/repository/mysql.repository.js', () => ({
-  getMySQLPool: () => ({
+vi.mock('../../../src/tools/database/mysql/repository/mysql.repository.js', () => {
+  const pool = {
     getConnection: vi.fn().mockResolvedValue({
       execute: vi.fn().mockImplementation(async (sql: string) => {
         if (sql.includes('EXPLAIN ANALYZE')) {
@@ -53,9 +53,13 @@ vi.mock('../../../src/tools/database/mysql/repository/mysql.repository.js', () =
       query: vi.fn().mockResolvedValue([[]]),
       release: vi.fn(),
     }),
-  }),
-  executeMySQLQuery: vi.fn(),
-}));
+  };
+  return {
+    getMySQLPool: () => pool,
+    acquireMySQLPool: () => ({ pool, release: vi.fn() }),
+    executeMySQLQuery: vi.fn(),
+  };
+});
 
 // Set NODE_ENV to test to prevent main() auto-run, then import server
 process.env.NODE_ENV = 'test';

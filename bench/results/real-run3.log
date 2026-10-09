@@ -1,0 +1,10 @@
+scenario 1 (simple code change) · optimized…
+scenario 2 (small security review) · optimized…
+scenario 3 (medium feature) · optimized…
+| scenario | variant | strategy | stages | turns | switches | models | tokens in / cached / out | time | result |
+|---|---|---|---|---|---|---|---|---|---|
+| 1. simple code change | optimized | adaptive | 1 | 1 | 0 | gpt-6-luna | 80491 / 64512 / 438 | 26s | completed, tests pass |
+| 2. small security review | optimized | adaptive | 1 | 1 | 0 | gpt-6-luna | 101334 / 89856 / 539 | 21s | completed, tests pass |
+| 3. medium feature | optimized | adaptive | 1 | 1 | 0 | gpt-6-luna | 128428 / 114176 / 1407 | 25s | completed, tests pass |
+
+written: bench/results/routing-real-1_2_3-optimized-2026-10-09.json

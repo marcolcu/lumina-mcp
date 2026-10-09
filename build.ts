@@ -22,7 +22,18 @@ build({
   banner: {
     js: '#!/usr/bin/env node', // CRITICAL for npx / CLI execution
   },
-}).then(() => {
+}).then(() => build({
+  entryPoints: ['src/smart-codex/cli.ts'],
+  bundle: true, platform: 'node', format: 'esm', target: 'node20', outfile: 'dist/smart-codex.js',
+  minify: true, packages: 'external', banner: { js: '#!/usr/bin/env node' },
+})).then(() => build({
+  entryPoints: ['src/lumina/tui/tui.ts'],
+  bundle: true, platform: 'node', format: 'esm', target: 'node20', outfile: 'dist/lumina.js',
+  minify: true, packages: 'external', banner: { js: '#!/usr/bin/env node' },
+})).then(() => {
+  // npm bin targets must stay executable (the dist directory is recreated on every build)
+  for (const f of ['index.js', 'smart-codex.js', 'lumina.js']) fs.chmodSync(path.join('dist', f), 0o755);
+
   // Copy skills folder to dist
   const skillsSrcDir = path.join('src', 'skills');
   const skillsDistDir = path.join('dist', 'skills');

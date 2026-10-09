@@ -1,4 +1,4 @@
-import { executeMySQLQuery, getMySQLPool } from '../repository/mysql.repository.js';
+import { acquireMySQLPool, executeMySQLQuery } from '../repository/mysql.repository.js';
 import { filterSensitiveColumns } from '../../utils/security.js';
 import { assertReadOnlyQuery } from '../../../../lumina/core/database/index.js';
 import {
@@ -26,10 +26,11 @@ export async function analyzeMySQLQueryPlan(
   sql: string,
   databaseName?: string,
 ): Promise<QueryAnalysisResult> {
-  const pool = getMySQLPool(databaseName);
-  const connection = await pool.getConnection();
+  const { pool, release } = acquireMySQLPool(databaseName);
+  let connection: Awaited<ReturnType<typeof pool.getConnection>> | undefined;
 
   try {
+    connection = await pool.getConnection();
     const explainSQL = `EXPLAIN ${sql}`;
     const [rows] = await connection.execute(explainSQL);
     const [warnings] = await connection.query('SHOW WARNINGS');
@@ -186,6 +187,7 @@ export async function analyzeMySQLQueryPlan(
       seniorAudit,
     };
   } finally {
-    connection.release();
+    connection?.release();
+    release();
   }
 }

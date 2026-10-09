@@ -48,6 +48,7 @@ describe('Lumina MCP Database Tools Server', () => {
         expect.objectContaining({ name: 'list_postgresql_tables' }),
         expect.objectContaining({ name: 'inspect_postgresql_table' }),
         expect.objectContaining({ name: 'analyze_postgresql_query' }),
+        expect.objectContaining({ name: 'lumina_memory_stats' }),
       ]),
     );
   });

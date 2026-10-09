@@ -1,0 +1,172 @@
+{
+  "mode": "real",
+  "date": "2026-10-09T15:08:30.218Z",
+  "runs": [
+    {
+      "variant": "legacy",
+      "scenario": 1,
+      "strategy": "single",
+      "stages": 1,
+      "turns": 1,
+      "switches": 0,
+      "models": [
+        "gpt-6-luna"
+      ],
+      "usage": {
+        "totalTokens": 81293,
+        "inputTokens": 80860,
+        "cachedInputTokens": 65536,
+        "outputTokens": 433
+      },
+      "ms": 13137,
+      "status": "completed",
+      "testsPass": false
+    },
+    {
+      "variant": "optimized",
+      "scenario": 1,
+      "strategy": "adaptive",
+      "stages": 1,
+      "turns": 1,
+      "switches": 0,
+      "models": [
+        "gpt-6-luna"
+      ],
+      "usage": {
+        "totalTokens": 80951,
+        "inputTokens": 80508,
+        "cachedInputTokens": 69632,
+        "outputTokens": 443
+      },
+      "ms": 14768,
+      "status": "completed",
+      "testsPass": false
+    },
+    {
+      "variant": "legacy",
+      "scenario": 2,
+      "strategy": "fixed pipeline",
+      "stages": 6,
+      "turns": 6,
+      "switches": 3,
+      "models": [
+        "gpt-6-luna",
+        "gpt-6-sol",
+        "gpt-6-luna",
+        "gpt-6-luna",
+        "gpt-6-sol",
+        "gpt-6-sol"
+      ],
+      "usage": {
+        "totalTokens": 528367,
+        "inputTokens": 526022,
+        "cachedInputTokens": 421760,
+        "outputTokens": 2345
+      },
+      "ms": 63502,
+      "status": "completed",
+      "testsPass": true
+    },
+    {
+      "variant": "optimized",
+      "scenario": 2,
+      "strategy": "adaptive",
+      "stages": 1,
+      "turns": 1,
+      "switches": 0,
+      "models": [
+        "gpt-6-luna"
+      ],
+      "usage": {
+        "totalTokens": 151889,
+        "inputTokens": 150798,
+        "cachedInputTokens": 130304,
+        "outputTokens": 1091
+      },
+      "ms": 39352,
+      "status": "completed",
+      "testsPass": false
+    },
+    {
+      "variant": "legacy",
+      "scenario": 3,
+      "strategy": "single",
+      "stages": 1,
+      "turns": 1,
+      "switches": 0,
+      "models": [
+        "gpt-6-luna"
+      ],
+      "usage": {
+        "totalTokens": 153682,
+        "inputTokens": 151850,
+        "cachedInputTokens": 110848,
+        "outputTokens": 1832
+      },
+      "ms": 28203,
+      "status": "completed",
+      "testsPass": false
+    },
+    {
+      "variant": "optimized",
+      "scenario": 3,
+      "strategy": "adaptive",
+      "stages": 2,
+      "turns": 2,
+      "switches": 1,
+      "models": [
+        "gpt-6-luna",
+        "gpt-6-sol"
+      ],
+      "usage": {
+        "totalTokens": 291687,
+        "inputTokens": 289622,
+        "cachedInputTokens": 199552,
+        "outputTokens": 2065
+      },
+      "ms": 41270,
+      "status": "completed",
+      "testsPass": true
+    },
+    {
+      "variant": "legacy",
+      "scenario": 6,
+      "strategy": "single",
+      "stages": 1,
+      "turns": 1,
+      "switches": 0,
+      "models": [
+        "gpt-6-luna"
+      ],
+      "usage": {
+        "totalTokens": 125858,
+        "inputTokens": 125251,
+        "cachedInputTokens": 112128,
+        "outputTokens": 607
+      },
+      "ms": 31237,
+      "status": "completed",
+      "testsPass": true
+    },
+    {
+      "variant": "optimized",
+      "scenario": 6,
+      "strategy": "adaptive",
+      "stages": 1,
+      "turns": 1,
+      "switches": 0,
+      "models": [
+        "gpt-6-luna"
+      ],
+      "usage": {
+        "totalTokens": 83300,
+        "inputTokens": 82776,
+        "cachedInputTokens": 60416,
+        "outputTokens": 524
+      },
+      "ms": 12312,
+      "status": "completed",
+      "testsPass": true
+    }
+  ]
+}

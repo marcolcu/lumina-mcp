@@ -1,0 +1,38 @@
+{
+  "mode": "real",
+  "date": "2026-10-09T15:14:39.520Z",
+  "runs": [
+    {
+      "escalations": [
+        "tests still failing after previous stage"
+      ],
+      "testCommands": [
+        "turn 1: exit 0 · /bin/zsh -lc \"cat src/math.js && cat src/app.js && cat test/math.test.js && rg -n \\\"math\\\\.js|\\\\bsum\\\\b\\\" --glob '\"'!nod",
+        "turn 1: exit 1 · /bin/zsh -lc \"node --test test/math.test.js && rg -n \\\"\\\\bsum\\\\b\\\" src test\"",
+        "turn 2: exit 1 · /bin/zsh -lc \"'/opt/homebrew/bin/caveman' shrink -- rg -n '\\\\bsum\\\\b' src test\"",
+        "turn 2: exit 0 · /bin/zsh -lc 'node --test test/math.test.js'",
+        "turn 2: exit 0 · /bin/zsh -lc \"'/opt/homebrew/bin/caveman' shrink -- git diff -- src/math.js src/app.js test/math.test.js\"",
+        "turn 2: exit 0 · /bin/zsh -lc \"node --test test/math.test.js && { rg -n '\\\\bsum\\\\b' src test; rg_status=\"'$?; test \"$rg_status\" -eq 1; }'"
+      ],
+      "variant": "optimized",
+      "scenario": 1,
+      "strategy": "adaptive",
+      "stages": 2,
+      "turns": 2,
+      "switches": 1,
+      "models": [
+        "gpt-6-luna",
+        "gpt-6-sol"
+      ],
+      "usage": {
+        "totalTokens": 175325,
+        "inputTokens": 174089,
+        "cachedInputTokens": 127744,
+        "outputTokens": 1236
+      },
+      "ms": 36807,
+      "status": "completed",
+      "testsPass": true
+    }
+  ]
+}

@@ -39,7 +39,9 @@
     "dist"
   ],
   "bin": {
-    "lumina-mcp": "dist/index.js"
+    "lumina-mcp": "dist/index.js",
+    "smart-codex": "dist/smart-codex.js",
+    "lumina": "dist/lumina.js"
   },
   "scripts": {
     "dev": "tsx watch src/index.ts",

@@ -61,6 +61,46 @@ export async function createCodeReview(
   );
 }
 
+export interface AutoApproveResult {
+  approved: boolean;
+  ciState: string;
+  reason: string;
+  review?: GiteaReviewResponse;
+}
+
+export async function autoApprovePullRequestIfChecksPass(
+  repository: string,
+  pullRequestNumber: number,
+  baseUrl?: string,
+): Promise<AutoApproveResult> {
+  const pr = await giteaRepository.getPullRequest(repository, pullRequestNumber, baseUrl);
+  const status = await giteaRepository.getCombinedCommitStatus(repository, pr.head.sha, baseUrl);
+
+  if (status.state !== 'success') {
+    return {
+      approved: false,
+      ciState: status.state,
+      reason: `CI checks are "${status.state}" (not "success") for commit ${pr.head.sha}. Skipped auto-approve.`,
+    };
+  }
+
+  const review = await giteaRepository.createCodeReview(
+    repository,
+    pullRequestNumber,
+    'APPROVE',
+    'Auto-approved: all CI checks passed.',
+    undefined,
+    baseUrl,
+  );
+
+  return {
+    approved: true,
+    ciState: status.state,
+    reason: 'All CI checks passed.',
+    review,
+  };
+}
+
 export async function getPRReviewComments(
   repository: string,
   pullRequestNumber: number,

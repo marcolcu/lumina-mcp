@@ -1,12 +1,29 @@
 import pg from 'pg';
 import dotenv from 'dotenv';
+import { LruTtlCache } from '../../../../utils/lru-ttl-cache.js';
 
 dotenv.config();
 
 const { Pool } = pg;
-const pools: Record<string, pg.Pool> = {};
+const MAX_CACHED_DATABASE_POOLS = 8;
+const POOL_CACHE_TTL_MS = 60_000;
+function closeEvictedPool(pool: pg.Pool): void {
+  void Promise.resolve().then(() => pool.end()).catch((error: unknown) => console.error('Failed to close evicted PostgreSQL pool:', error));
+}
+const pools = new LruTtlCache<string, pg.Pool>(MAX_CACHED_DATABASE_POOLS, POOL_CACHE_TTL_MS, closeEvictedPool);
 
-export function getPostgresPool(databaseName?: string): pg.Pool {
+export function getPostgresPoolCacheStats() {
+  return pools.stats();
+}
+
+export async function closePostgresPools(): Promise<void> {
+  const openPools = pools.clear();
+  const results = await Promise.allSettled(openPools.map((pool) => Promise.resolve().then(() => pool.end())));
+  const errors = results.filter((result): result is PromiseRejectedResult => result.status === 'rejected');
+  if (errors.length > 0) throw new AggregateError(errors.map((result) => result.reason), 'Failed to close PostgreSQL pools.');
+}
+
+function resolveDatabaseName(databaseName?: string): string {
   let defaultDbName = process.env.PG_DATABASE || 'lumina_db';
   if (process.env.POSTGRES_URL) {
     try {
@@ -19,12 +36,10 @@ export function getPostgresPool(databaseName?: string): pg.Pool {
       console.error('Failed to parse POSTGRES_URL:', error);
     }
   }
-  const dbName = databaseName || defaultDbName;
+  return databaseName || defaultDbName;
+}
 
-  if (pools[dbName]) {
-    return pools[dbName];
-  }
-
+function createPool(dbName: string, hasOverride: boolean): pg.Pool {
   let config: pg.PoolConfig = {
     max: 10,
     idleTimeoutMillis: 30000,
@@ -32,7 +47,7 @@ export function getPostgresPool(databaseName?: string): pg.Pool {
   };
 
   if (process.env.POSTGRES_URL) {
-    if (databaseName) {
+    if (hasOverride) {
       // Parse URL and override database
       const url = new URL(process.env.POSTGRES_URL);
       url.pathname = `/${dbName}`;
@@ -51,9 +66,18 @@ export function getPostgresPool(databaseName?: string): pg.Pool {
     };
   }
 
-  pools[dbName] = new Pool(config);
+  return new Pool(config);
+}
 
-  return pools[dbName];
+export function getPostgresPool(databaseName?: string): pg.Pool {
+  const dbName = resolveDatabaseName(databaseName);
+  return pools.getOrCreate(dbName, () => createPool(dbName, databaseName !== undefined));
+}
+
+export function acquirePostgresPool(databaseName?: string): { pool: pg.Pool; release(): void } {
+  const dbName = resolveDatabaseName(databaseName);
+  const lease = pools.acquire(dbName, () => createPool(dbName, databaseName !== undefined));
+  return { pool: lease.value, release: lease.release };
 }
 
 export async function executePostgresQuery<T>(
@@ -61,7 +85,11 @@ export async function executePostgresQuery<T>(
   params?: unknown[],
   databaseName?: string,
 ): Promise<T[]> {
-  const connectionPool = getPostgresPool(databaseName);
-  const result = await connectionPool.query(query, params);
-  return result.rows as T[];
+  const { pool, release } = acquirePostgresPool(databaseName);
+  try {
+    const result = await pool.query(query, params);
+    return result.rows as T[];
+  } finally {
+    release();
+  }
 }

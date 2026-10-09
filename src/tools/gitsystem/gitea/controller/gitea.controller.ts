@@ -5,12 +5,14 @@ import {
   getPRReviewComments,
   getPullRequestDiff,
   requestReviewers,
+  autoApprovePullRequestIfChecksPass,
 } from '../service/gitea.service.js';
 import {
   CreateGiteaPRSchema,
   ReviewGiteaPRSchema,
   FixGiteaPRSchema,
   GetGiteaPRDiffSchema,
+  AutoApproveGiteaPRSchema,
 } from '../../dto/gitsystem.dto.js';
 
 const GITEA_FALLBACK_INSTRUCTIONS = `
@@ -134,6 +136,45 @@ export function registerGiteaController(server: McpServer) {
             {
               type: 'text',
               text: `Successfully submitted review: ${result.html_url}\nState: ${result.state}`,
+            },
+          ],
+        };
+      } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        return {
+          isError: true,
+          content: [
+            {
+              type: 'text',
+              text: `Gitea Tool Error: ${errorMessage}\n\n${GITEA_FALLBACK_INSTRUCTIONS}`,
+            },
+          ],
+        };
+      }
+    },
+  );
+
+  server.registerTool(
+    'auto_approve_gitea_pr',
+    {
+      description:
+        'Checks CI commit status for a Gitea PR and approves it automatically only if all checks report "success". Does nothing (no error) if checks are pending, failed, or erroring. Requires GITEA_BASE_URL and GITEA_TOKEN, or an explicit baseUrl.',
+      inputSchema: AutoApproveGiteaPRSchema,
+    },
+    async ({ repository, pullRequestNumber, baseUrl }) => {
+      try {
+        const result = await autoApprovePullRequestIfChecksPass(
+          repository,
+          pullRequestNumber,
+          baseUrl,
+        );
+        return {
+          content: [
+            {
+              type: 'text',
+              text: result.approved
+                ? `Auto-approved PR #${pullRequestNumber}: ${result.reason}\n${result.review?.html_url ?? ''}`
+                : `Not approved. ${result.reason}`,
             },
           ],
         };

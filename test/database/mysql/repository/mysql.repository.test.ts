@@ -3,12 +3,14 @@ import mysql from 'mysql2/promise';
 
 vi.mock('mysql2/promise', () => ({
   default: {
-    createPool: vi.fn().mockReturnValue({}),
+    createPool: vi.fn().mockImplementation(() => ({ end: vi.fn().mockResolvedValue(undefined) })),
   },
 }));
 
 describe('MySQL Repository', () => {
   let getMySQLPool: (databaseName?: string) => mysql.Pool;
+  let getCacheStats: () => { size: number; hits: number; misses: number; evictions: number };
+  let closeMySQLPools: () => Promise<void>;
   let originalEnv: NodeJS.ProcessEnv;
 
   beforeEach(async () => {
@@ -22,6 +24,8 @@ describe('MySQL Repository', () => {
     const repo =
       await import('../../../../src/tools/database/mysql/repository/mysql.repository.js');
     getMySQLPool = repo.getMySQLPool;
+    getCacheStats = repo.getMySQLPoolCacheStats;
+    closeMySQLPools = repo.closeMySQLPools;
   });
 
   afterEach(() => {
@@ -49,5 +53,21 @@ describe('MySQL Repository', () => {
         database: 'override_db',
       }),
     );
+  });
+
+  it('bounds distinct database pools and reuses cached entries', () => {
+    for (let i = 0; i < 10; i += 1) getMySQLPool(`database-${i}`);
+    expect(getMySQLPool('database-9')).toBe(getMySQLPool('database-9'));
+    expect(getCacheStats()).toMatchObject({ size: 8, misses: 10, evictions: 2, hits: 2 });
+  });
+
+  it('closes every cached pool during shutdown', async () => {
+    const first = getMySQLPool('first');
+    const second = getMySQLPool('second');
+    await closeMySQLPools();
+
+    expect(vi.mocked(first.end)).toHaveBeenCalledOnce();
+    expect(vi.mocked(second.end)).toHaveBeenCalledOnce();
+    expect(getCacheStats().size).toBe(0);
   });
 });

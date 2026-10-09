@@ -16,3 +16,17 @@ export interface GiteaReviewResponse {
   state: string;
   html_url: string;
 }
+
+export interface GiteaPRDetail {
+  number: number;
+  html_url: string;
+  mergeable: boolean;
+  head: {
+    sha: string;
+  };
+}
+
+export interface GiteaCombinedStatus {
+  state: 'pending' | 'success' | 'error' | 'failure';
+  statuses: Array<{ context: string; status: string; description: string }>;
+}

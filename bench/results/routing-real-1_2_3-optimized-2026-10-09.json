@@ -1,0 +1,80 @@
+{
+  "mode": "real",
+  "date": "2026-10-09T15:16:19.117Z",
+  "runs": [
+    {
+      "escalations": [],
+      "testCommands": [],
+      "variant": "optimized",
+      "scenario": 1,
+      "strategy": "adaptive",
+      "stages": 1,
+      "turns": 1,
+      "switches": 0,
+      "models": [
+        "gpt-6-luna"
+      ],
+      "usage": {
+        "totalTokens": 80929,
+        "inputTokens": 80491,
+        "cachedInputTokens": 64512,
+        "outputTokens": 438
+      },
+      "ms": 25622,
+      "status": "completed",
+      "testsPass": true
+    },
+    {
+      "escalations": [],
+      "testCommands": [
+        "turn 1: exit 0 · /bin/zsh -lc \"pwd && rg --files -g 'AGENTS.md' -g 'package.json' -g '*test*' -g 'math.js' -g 'README*' | head -80\"",
+        "turn 1: exit 0 · /bin/zsh -lc \"cat package.json && cat src/math.js && cat test/math.test.js && rg --files -g 'AGENTS.md' -g '*.md' | head",
+        "turn 1: exit 0 · /bin/zsh -lc 'npm test && git diff --check && git diff -- src/math.js test/math.test.js'"
+      ],
+      "variant": "optimized",
+      "scenario": 2,
+      "strategy": "adaptive",
+      "stages": 1,
+      "turns": 1,
+      "switches": 0,
+      "models": [
+        "gpt-6-luna"
+      ],
+      "usage": {
+        "totalTokens": 101873,
+        "inputTokens": 101334,
+        "cachedInputTokens": 89856,
+        "outputTokens": 539
+      },
+      "ms": 21006,
+      "status": "completed",
+      "testsPass": true
+    },
+    {
+      "escalations": [],
+      "testCommands": [
+        "turn 1: exit 0 · /bin/zsh -lc \"pwd && rg --files -g 'AGENTS.md' -g 'package.json' -g 'src/**' -g '*test*' -g 'test/**' -g 'tests/**'\"",
+        "turn 1: exit 2 · /bin/zsh -lc \"cat package.json && cat src/csv.js && cat src/math.js && cat test/math.test.js && rg --files -g 'AGENTS.md",
+        "turn 1: exit 0 · /bin/zsh -lc \"'/opt/homebrew/bin/caveman' shrink -- npm test\""
+      ],
+      "variant": "optimized",
+      "scenario": 3,
+      "strategy": "adaptive",
+      "stages": 1,
+      "turns": 1,
+      "switches": 0,
+      "models": [
+        "gpt-6-luna"
+      ],
+      "usage": {
+        "totalTokens": 129835,
+        "inputTokens": 128428,
+        "cachedInputTokens": 114176,
+        "outputTokens": 1407
+      },
+      "ms": 24825,
+      "status": "completed",
+      "testsPass": true
+    }
+  ]
+}

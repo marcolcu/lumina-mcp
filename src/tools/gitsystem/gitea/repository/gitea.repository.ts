@@ -1,5 +1,10 @@
 import { GITEA_ENDPOINTS, resolveGiteaBaseUrl } from '../../constants/gitea.endpoints.js';
-import { GiteaPRResponse, GiteaReviewResponse } from '../../types/gitea.types.js';
+import {
+  GiteaPRResponse,
+  GiteaReviewResponse,
+  GiteaPRDetail,
+  GiteaCombinedStatus,
+} from '../../types/gitea.types.js';
 
 // Map the GitHub-style review verbs used across the gitsystem tools to Gitea's
 // ReviewStateType enum accepted by POST /pulls/{index}/reviews.
@@ -171,6 +176,28 @@ export class GiteaRepository {
           comments: giteaComments,
         }),
       },
+    );
+  }
+
+  public async getPullRequest(
+    repository: string,
+    pullRequestNumber: number,
+    baseUrl?: string,
+  ): Promise<GiteaPRDetail> {
+    return this.fetchFromGitea<GiteaPRDetail>(
+      baseUrl,
+      GITEA_ENDPOINTS.PULL_REQUEST(repository, pullRequestNumber),
+    );
+  }
+
+  public async getCombinedCommitStatus(
+    repository: string,
+    ref: string,
+    baseUrl?: string,
+  ): Promise<GiteaCombinedStatus> {
+    return this.fetchFromGitea<GiteaCombinedStatus>(
+      baseUrl,
+      GITEA_ENDPOINTS.COMMIT_STATUS(repository, ref),
     );
   }
 
