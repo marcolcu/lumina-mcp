@@ -9,12 +9,17 @@ import { ApprovalMode, MODES, evaluate, evaluateMcp, unwrap } from '../approval/
 import { fetchUsage, formatUsage } from '../usage.js';
 import { Activity } from './activity.js';
 import { renderHistory } from './history.js';
+import { TicketSession } from '../ticket.js';
+import { splitPrompt } from '../../smart-codex/router.js';
+import { resolveModel } from '../../smart-codex/models.js';
 import { ExecutionPlan, Stage, StagedExecution, logRouting, planExecution } from '../stages.js';
 import { Composer } from './composer.js';
 import { Screen } from './screen.js';
 import { AppClient, ApprovalRequest, Chat, DEFAULT_POLICY, Decision, Policy, ThreadSummary } from './chat.js';
 import { TurnRouter } from './routing.js';
-import { COMMANDS, CommandPalette, commandNames, helpText } from './commands.js';
+import { CommandPalette, commandNames, helpText } from './commands.js';
+import { copyToClipboard } from './clipboard.js';
+import { imagePathFromPaste, readClipboardImage } from './images.js';
 import { SkillCatalog, SkillInfo, SkillPicker, mentionedSkills, scopeLabel } from './skills.js';
 import type { Key } from './keys.js';
 
@@ -35,6 +40,10 @@ export interface TuiOptions {
   reconnect?: () => Promise<AppClient>;
   /** Shown in the welcome header. */
   version?: string;
+  /** Clipboard image reader (tests inject one). */
+  readImage?: () => Promise<string | undefined>;
+  /** Clipboard writer (tests inject one). */
+  clipboard?: (text: string) => Promise<string>;
   /** Real connection info for the welcome header (omitted when unknown). */
   connection?: string;
 }
@@ -49,7 +58,8 @@ export async function runTui(initialClient: AppClient, cwd: string, io: TuiIO = 
   const live = tty && process.env.TERM !== 'dumb'; // cursor-addressable: persistent bottom region
   const color = tty && !process.env.NO_COLOR;
   const animate = live && !process.env.LUMINA_NO_ANIMATION;
-  const screen = new Screen(output, { live, color });
+  const sgr = (on: string, off: string) => (x: string) => (color ? `\x1b[${on}m${x}\x1b[${off}m` : x);
+  const screen = new Screen(output, { live, color, styler: { bold: sgr('1', '22'), code: sgr('36', '39'), link: sgr('4', '24'), dim: sgr('2', '22') } });
   const h = { key: (_k: Key) => false, submit: (_t: string) => true, interrupt: () => undefined as void, eof: () => undefined as void };
   const paintInput = () => { if (live) screen.setInput(composer.view(screen.columns)); };
   // slash-command palette: local, driven by the input text; overlay is shared with the skills picker
@@ -64,13 +74,24 @@ export async function runTui(initialClient: AppClient, cwd: string, io: TuiIO = 
   let interrupting = false;
   let closing = false;
   const write = (s: string) => activity.text(s);
+  let answer = ''; // raw text of the last assistant answer (for /copy all)
+  const onDelta = (d: string) => { answer += d; write(d); };
   const note = (m: string) => write(`${m.split('\n').map((l) => activity.dim(l)).join('\n')}\n`);
   const askManual = (r: ApprovalRequest) => new Promise<Decision>((resolve) => {
     pendingApproval = resolve;
     activity.pause();
     composer.stash(); // answers use a fresh buffer; the user's draft comes back afterwards
     composer.setPlaceholder('y approve · a for session · n reject · c cancel');
-    write(`\n${activity.paintStatus('warn', '⚠')} Approval Required\n\n${r.kind === 'command' ? 'Command' : r.kind === 'mcpTool' ? 'MCP tool' : 'Changes'}:\n  ${r.summary}\n${r.detail ? `  ${activity.dim(r.detail)}\n` : ''}\n[y] Approve once   [a] Always this session   [n] Reject   [c] Cancel\n`);
+    const home = os.homedir();
+    const tidy = (p: string) => (p.startsWith(home) ? `~${p.slice(home.length)}` : p);
+    const lines = [`${activity.paintStatus('warn', '⚠')} Approval Required`];
+    if (r.kind === 'command' && r.reason) lines.push(activity.dim(r.reason));
+    lines.push('', `${r.kind === 'command' ? 'Command' : r.kind === 'mcpTool' ? 'MCP tool' : 'Changes'}:`);
+    lines.push(`  ${r.kind === 'command' && r.command ? unwrap(r.command) : r.summary}`); // the shell wrapper is noise
+    if (r.kind === 'command' && r.cwd) lines.push(activity.dim(`  in ${tidy(r.cwd)}`));
+    else if (r.kind !== 'command' && r.detail) lines.push(activity.dim(`  ${r.detail}`));
+    lines.push('', '[y] Approve once   [a] Always this session   [n] Reject   [c] Cancel');
+    activity.block(lines.join('\n'));
   });
   // Approval mode lives only in this process/session; it starts as manual unless explicitly requested.
   let approvalMode: ApprovalMode = opts.approvalMode ?? 'manual';
@@ -90,7 +111,7 @@ export async function runTui(initialClient: AppClient, cwd: string, io: TuiIO = 
     }
     return askManual(r); // ask, manual mode, file changes and anything unclassified
   };
-  const chat = new Chat(client, { cwd, onDelta: write, onEvent: (m, p) => activity.event(m, p), onApproval: ask, policy: opts.policy ?? DEFAULT_POLICY });
+  const chat = new Chat(client, { cwd, onDelta, onEvent: (m, p) => activity.event(m, p), onApproval: ask, policy: opts.policy ?? DEFAULT_POLICY });
   const router = opts.router ?? new TurnRouter(loadConfig(cwd), cwd);
   let listed: ThreadSummary[] = [];
   // Skills: metadata from Codex's own skills/list; Codex itself loads SKILL.md bodies when a skill is used.
@@ -99,15 +120,53 @@ export async function runTui(initialClient: AppClient, cwd: string, io: TuiIO = 
   const paint = { accent: (x: string) => activity.accent(x), dim: (x: string) => activity.dim(x) };
   // suggestions shown: up to 8, fewer on short terminals so the input always stays on screen
   const paletteRows = () => Math.max(2, Math.min(8, (output.rows || 24) - 12));
-  paintOverlay = () => screen.setOverlay(picker ? picker.rows(screen.columns - 1, paint) : live && palette.open ? palette.rows(screen.columns - 1, paletteRows(), paint) : undefined);
+  // prompts queued with Tab while a turn runs; they run in order when it ends
+  const queue: string[] = [];
+  const queueRows = (): string[] | undefined => {
+    if (!queue.length) return undefined;
+    const w = screen.columns - 1;
+    const fit = (x: string) => (x.length > w ? `${x.slice(0, w - 1)}…` : x);
+    return [
+      paint.dim(fit(`  Queued (${queue.length}) · runs after the current turn · Ctrl-C clears`)),
+      ...queue.slice(0, 3).map((q, i) => fit(`  ${i + 1}. ${q.split('\n')[0]}${q.includes('\n') ? ' …' : ''}`)),
+      ...(queue.length > 3 ? [paint.dim(`  … +${queue.length - 3} more`)] : []),
+    ];
+  };
+  paintOverlay = () => screen.setOverlay(picker ? picker.rows(screen.columns - 1, paint) : live && palette.open ? palette.rows(screen.columns - 1, paletteRows(), paint) : live ? queueRows() : undefined);
+
+  // pasted images: a [Image #n] token in the draft stands for a file; it is attached when the prompt is sent
+  const images = new Map<string, string>();
+  const attachImage = (file: string) => {
+    const label = `[Image #${images.size + 1}]`;
+    images.set(label, file);
+    const t = composer.text;
+    composer.insertText(`${t && !/\s$/.test(t) ? ' ' : ''}${label} `);
+  };
+  const imagesIn = (text: string): string[] => [...new Set([...text.matchAll(/\[Image #\d+\]/g)].map((m) => images.get(m[0])).filter((p): p is string => Boolean(p)))];
+  /** Keys handled before the input: image paste (Ctrl+V / pasted image path) and Tab-to-queue. */
+  const extraKey = (k: Key): boolean => {
+    if (pendingApproval) return false;
+    if (k.t === 'paste') { const file = imagePathFromPaste(k.s, cwd); if (file) { attachImage(file); return true; } return false; }
+    if (k.t !== 'key') return false;
+    if (k.name === 'paste-image') {
+      void (opts.readImage ?? readClipboardImage)().then((file) => {
+        if (file) attachImage(file); else note('no image in the clipboard (text is pasted by the terminal: Cmd+V / Ctrl+Shift+V)');
+      }, () => note('could not read the clipboard'));
+      return true;
+    }
+    // Tab = queue (or send when idle); on an empty input it does nothing (no stray indentation)
+    if (k.name === 'tab' && live) { if (composer.text.trim()) enqueue(composer.text); return true; }
+    return false;
+  };
+  let enqueue = (_t: string) => undefined as void;
   const paintPicker = paintOverlay;
   h.key = (k) => {
     if (!picker) {
-      if (!live) return false;
+      if (!live) return extraKey(k);
       const r = palette.handle(k);
       if (typeof r === 'string') composer.replace(r); // filled, not executed: Enter again runs it
-      if (r !== false) paintOverlay();
-      return r !== false;
+      if (r !== false) { paintOverlay(); return true; }
+      return extraKey(k);
     }
     const r = picker.handle(k);
     if (r === 'select') { // insert the reference into the draft; nothing is sent
@@ -120,6 +179,7 @@ export async function runTui(initialClient: AppClient, cwd: string, io: TuiIO = 
   };
   let lastPick: { model: string; effort: string } | undefined;
   let staged: StagedExecution | undefined;
+  const ticket = new TicketSession();
   let stageCancel = false;
 
   /** Replays the stored conversation above the composer after a resume. A failure only skips the replay. */
@@ -138,9 +198,10 @@ export async function runTui(initialClient: AppClient, cwd: string, io: TuiIO = 
     const model = router.model ?? lastPick?.model;
     const name = model ? router.displayName(model) : router.configuredModels().map((m) => router.displayName(m)).join(' ⇄ ');
     const effort = router.reasoning ? `${cap(router.reasoning)} (manual)` : lastPick ? cap(lastPick.effort) : '';
-    return `  ◉ ${router.model ? 'Manual model' : 'Auto Routing'} · ${[name, effort].filter(Boolean).join(' · ')}${approvalMode !== 'manual' ? ` · Approval: ${cap(approvalMode)}` : ''}`;
+    const tk = ticket.ticket && ticket.mode && ticket.mode !== 'done' ? ` · ${ticket.ticket.id}: ${({ understanding: 'Understanding', ready: 'Ready', implementing: 'Implementing' } as Record<string, string>)[ticket.mode]}` : '';
+    return `  ◉ ${router.model ? 'Manual model' : 'Auto Routing'} · ${[name, effort].filter(Boolean).join(' · ')}${approvalMode !== 'manual' ? ` · Approval: ${cap(approvalMode)}` : ''}${tk}`;
   };
-  const refreshFooter = () => { if (live) screen.setFooter([activity.dim(screen.fit(statusBar())), activity.dim(screen.fit(`  ${COMMANDS.filter((c) => c.hint).map((c) => c.name).join('  ')}`))]); };
+  const refreshFooter = () => { if (live) screen.setFooter([activity.dim(screen.fit(statusBar()))]); }; // commands: type / (palette)
 
   // ---- welcome ----
   const home = os.homedir();
@@ -197,12 +258,28 @@ export async function runTui(initialClient: AppClient, cwd: string, io: TuiIO = 
       case '/help':
         note(helpText());
         return true;
+      case '/copy': {
+        const blocks = screen.codeBlocks;
+        const a = arg.trim().toLowerCase();
+        let text: string | undefined;
+        let what = '';
+        if (a === 'all') { text = answer.trim(); what = 'last answer'; }
+        else {
+          const n = a ? Number(a) : blocks.length;
+          if (a && (!Number.isInteger(n) || n < 1 || n > blocks.length)) { note(blocks.length ? `no code block ${a}; there ${blocks.length === 1 ? 'is 1' : `are ${blocks.length}`}` : 'no code blocks yet; /copy all copies the last answer'); return true; }
+          text = blocks[n - 1]?.text; what = `code block ${n}`;
+        }
+        if (!text) { note(a === 'all' ? 'nothing to copy yet' : 'no code blocks yet; /copy all copies the last answer'); return true; }
+        const how = await (opts.clipboard ?? ((x: string) => copyToClipboard(x, output)))(text);
+        note(`✓ copied ${what} (${text.split('\n').length} line${text.includes('\n') ? 's' : ''}) to the ${how}`);
+        return true;
+      }
       case '/usage': {
         note(formatUsage(await fetchUsage(client), chat.usage));
         return true;
       }
       case '/new':
-        chat.reset(); router.reset();
+        chat.reset(); router.reset(); ticket.reset();
         resetApproval();
         note('new conversation');
         return true;
@@ -218,7 +295,7 @@ export async function runTui(initialClient: AppClient, cwd: string, io: TuiIO = 
           if (!t) { note('run /resume first, then pick a listed number'); return true; }
           id = t.id;
         }
-        await chat.resume(id); router.reset();
+        await chat.resume(id); router.reset(); ticket.reset();
         resetApproval();
         note(`resumed ${id.slice(0, 8)} (${chat.model ?? '?'})`);
         await showHistory(id);
@@ -265,6 +342,7 @@ export async function runTui(initialClient: AppClient, cwd: string, io: TuiIO = 
       if (!running || interrupting) return void finish(130);
       interrupting = true;
       stageCancel = true; // no further stages start
+      if (queue.length) { note(`queue cleared (${queue.length})`); queue.length = 0; paintOverlay(); }
       if (pendingApproval) { composer.restore(); composer.setPlaceholder(IDLE_PLACEHOLDER); }
       pendingApproval?.('cancel');
       pendingApproval = undefined;
@@ -311,11 +389,34 @@ export async function runTui(initialClient: AppClient, cwd: string, io: TuiIO = 
     const ANSWERS: Record<string, Decision> = { y: 'accept', yes: 'accept', a: 'acceptForSession', always: 'acceptForSession', n: 'decline', no: 'decline', '': 'decline', c: 'cancel', cancel: 'cancel' };
     // Leading/trailing blank lines are dropped; inner newlines and indentation are preserved.
     const trimBlank = (s: string) => s.replace(/^(?:[ \t]*\n)+/, '').replace(/\s+$/, '');
-    const done = () => { if (quitWhenIdle) void finish(0); };
+    const busyNow = () => chat.busy || cmdBusy || Boolean(staged);
+    /** Ticket state after a turn: remember the explanation, whether the ticket was fetched, and where we are. */
+    const afterTicketTurn = (ok: boolean, tools: string[]) => {
+      ticket.afterTurn(answer, tools, ok);
+      if (ticket.ticket && ticket.mode === 'ready') note(`Ticket: ${ticket.ticket.id} · Mode: Ready for implementation · Requirements: updated (${ticket.clarifications.length} clarification${ticket.clarifications.length === 1 ? '' : 's'}) · say "kerjakan" / "implement it" to start`);
+      refreshFooter();
+    };
+    /** After a turn or command: run the next queued prompt, if any. */
+    const done = () => {
+      if (quitWhenIdle) return void finish(0);
+      if (queue.length) setTimeout(() => {
+        if (finished || busyNow() || !queue.length) return;
+        const next = queue.shift()!;
+        paintOverlay();
+        h.submit(next);
+      }, 0);
+    };
+    enqueue = (t: string) => {
+      composer.clear();
+      if (!busyNow()) { h.submit(t); return; } // nothing running: Tab just sends
+      queue.push(t);
+      paintOverlay();
+    };
 
     /** Returns false when the draft must be kept (a turn is running). */
     h.submit = (raw: string): boolean => {
       const text = trimBlank(raw);
+      const imgs = imagesIn(text);
       if (pendingApproval) {
         const d = ANSWERS[text.toLowerCase()];
         if (!d) { write('Please answer y, a, n or c\n'); return true; }
@@ -345,12 +446,27 @@ export async function runTui(initialClient: AppClient, cwd: string, io: TuiIO = 
           .finally(() => { cmdBusy = false; done(); });
         return true;
       }
+      // ticket workflow: understanding/clarifying is read-only; implementation only when asked
+      const tturn = ticket.prepare(text);
+      const prompt = tturn?.prompt ?? text;
+      const reading = Boolean(tturn?.readOnly);
       let pick;
-      try { pick = router.pick(text); } catch (e) { note(e instanceof Error ? e.message : String(e)); done(); return true; }
-      // a pinned /model or /reasoning means the user chose one model: no staging
-      // a pinned /model or /reasoning (or execution_strategy=direct) means plain single turns
-      const plan: ExecutionPlan | undefined = router.model || router.reasoning ? undefined : planExecution(text, pick.route, router.config, pick.sel);
+      try { pick = router.pick(tturn?.routeText ?? text); } catch (e) { note(e instanceof Error ? e.message : String(e)); done(); return true; }
+      // understanding a ticket is light work: the efficient model unless the request itself is complex
+      if (reading && !router.model && !router.reasoning) {
+        const tier = pick.route.base_complexity >= 7 ? 'balanced' : 'fast';
+        const effort = tier === 'balanced' || splitPrompt(text).reference.length > 2000 || (ticket.ticket?.source !== 'pasted' && !ticket.fetched) ? 'medium' : 'low';
+        const r = resolveModel(router.models, router.config.stages.tiers[tier], effort, false, router.config.stages.tiers.fast);
+        pick = { ...pick, sel: { model: r.model, effort: r.effort } };
+      }
+      // a pinned /model or /reasoning (or execution_strategy=direct), or a read-only ticket turn: plain single turns
+      const plan: ExecutionPlan | undefined = router.model || router.reasoning || reading ? undefined : planExecution(prompt, pick.route, router.config, pick.sel);
       const executor = plan && plan.strategy !== 'direct' ? plan : undefined;
+      if (tturn && ticket.ticket) {
+        const mode = tturn.intent === 'understand' ? 'Understanding' : tturn.intent === 'clarify' ? 'Clarifying' : 'Implementing';
+        note(`Ticket: ${ticket.ticket.id} · Mode: ${mode} · Model: ${router.displayName(pick.sel.model ?? '')} · Reasoning: ${cap(pick.sel.effort ?? '')}${reading ? ' · read-only' : ''}${tturn.intent === 'confirm' && ticket.clarifications.length ? ` · ${ticket.clarifications.length} clarification(s) applied` : ''}`);
+      }
+      if (pick.route.reference_chars > 0) note(`routed on your request · ${Math.round(pick.route.reference_chars / 100) / 10}k chars of pasted ticket/docs passed as context only`);
       lastPick = { model: pick.sel.model ?? '', effort: pick.sel.effort ?? '' };
       if (live) refreshFooter(); // the status bar shows the active model/effort
       else if (!executor || executor.stages.length === 1) note(`[${pick.route.tier} · ${pick.sel.model}/${pick.sel.effort}${pick.sticky ? ' · same as previous turn' : ''}]`);
@@ -368,11 +484,13 @@ export async function runTui(initialClient: AppClient, cwd: string, io: TuiIO = 
         stageCancel = false;
         cmdBusy = true;
         if (skills.length) note(`skills: ${skills.map((k) => `$${k.name}`).join(' ')}`);
+        if (imgs.length) note(`images: ${imgs.length} attached`);
+        answer = '';
         activity.begin(chat.threadId ? 'Thinking...' : 'Connecting...');
         let many = p.stages.length > 1;
-        const exec = new StagedExecution(text, p, {
+        const exec = new StagedExecution(prompt, p, {
           cfg: router.config, catalog: router.models,
-          send: (prompt, sel, o) => chat.send(prompt, sel, o.first ? skills : [], { isolated: o.isolated }),
+          send: (prompt, sel, o) => chat.send(prompt, sel, o.first ? skills : [], { isolated: o.isolated, images: o.first ? imgs : undefined }),
           interrupt: () => chat.interrupt(),
           cancelled: () => stageCancel,
           context: () => chat.contextTokens(),
@@ -405,6 +523,7 @@ export async function runTui(initialClient: AppClient, cwd: string, io: TuiIO = 
           if (r.stages.some((x) => x.thread === 'isolated')) chat.queueContext(`[Lumina context: ${JSON.stringify({ completed: exec.ctx.completed, modified_files: exec.ctx.modified_files, known_issues: exec.ctx.known_issues })}]`);
           activity.context = '';
           activity.end(r.status, r.error);
+          if (tturn) afterTicketTurn(r.status === 'completed', []);
         }, (e: unknown) => {
           activity.context = '';
           activity.end('failed', e instanceof Error ? e.message : String(e));
@@ -414,10 +533,13 @@ export async function runTui(initialClient: AppClient, cwd: string, io: TuiIO = 
         if (executor) return runStaged(executor, skills);
         logRouting({ level: 'info', event: 'route_selected', request_id: `req_${Date.now().toString(36)}`, execution_id: '-', routing_strategy: 'single', selected_model: pick.sel.model, routing_reason: pick.route.tier, escalation_level: 0 }, router.config);
         if (skills.length) note(`skills: ${skills.map((k) => `$${k.name}`).join(' ')}`);
+        if (imgs.length) note(`images: ${imgs.length} attached`);
+        answer = '';
         activity.begin(chat.threadId ? 'Thinking...' : 'Connecting...');
-        void chat.send(text, pick.sel, skills).then((r) => {
+        void chat.send(prompt, pick.sel, skills, { images: imgs, readOnly: reading }).then((r) => {
           interrupting = false;
           activity.end(r.status === 'interrupted' ? 'cancelled' : r.status === 'failed' || r.error ? 'failed' : 'completed', r.error);
+          if (tturn) afterTicketTurn(r.status === 'completed' && !r.error, (r.items ?? []).filter((i) => i.type === 'mcpToolCall').map((i) => i.tool ?? ''));
         }, (e: unknown) => {
           interrupting = false;
           activity.end('failed', e instanceof Error ? e.message : String(e));

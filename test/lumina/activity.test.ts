@@ -108,7 +108,7 @@ describe('streaming', () => {
     a.text('let me check');
     started(a, cmd('1', ['read'])); done(a, cmd('1', ['read']));
     a.end('completed');
-    expect(strip(text)).toContain('  let me check\n  ✓ Read 1 file\n');
+    expect(strip(text)).toContain('  let me check\n\n  ✓ Read 1 file\n'); // status lines after prose start a new paragraph
   });
 });
 
@@ -174,7 +174,7 @@ describe('terminal compatibility', () => {
     a.pause(); a.resume();
     a.end('completed');
     expect(text).not.toContain('\x1b');
-    expect(text).toBe('◆ Lumina\n  hello\n  ✓ Read 1 file\n  ✓ Completed in 0s\n\n');
+    expect(text).toBe('◆ Lumina\n  hello\n\n  ✓ Read 1 file\n\n  ✓ Completed in 0s\n\n');
   });
 });
 

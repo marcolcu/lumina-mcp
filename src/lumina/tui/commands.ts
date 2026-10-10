@@ -5,18 +5,17 @@ export interface CommandSpec {
   /** Argument hint shown after the name; commands with args complete with a trailing space. */
   args?: string;
   description: string;
-  /** Shown in the hint line under the input. */
-  hint?: boolean;
 }
 
-/** The single list of slash commands: dispatch, /help, hints and the palette all read from here. */
+/** The single list of slash commands: dispatch, /help and the palette all read from here. */
 export const COMMANDS: CommandSpec[] = [
   { name: '/resume', args: '[n|id]', description: 'Resume a previous conversation' },
-  { name: '/model', args: '[name|auto]', description: 'Select or change the active AI model', hint: true },
-  { name: '/reasoning', args: '[level|auto]', description: 'Configure model reasoning effort', hint: true },
-  { name: '/approval', args: '[manual|smart|auto|status]', description: 'Manage tool execution approvals', hint: true },
-  { name: '/skills', args: '[filter]', description: 'Browse and use available skills', hint: true },
-  { name: '/usage', description: 'View token usage and plan limits', hint: true },
+  { name: '/model', args: '[name|auto]', description: 'Select or change the active AI model' },
+  { name: '/reasoning', args: '[level|auto]', description: 'Configure model reasoning effort' },
+  { name: '/approval', args: '[manual|smart|auto|status]', description: 'Manage tool execution approvals' },
+  { name: '/skills', args: '[filter]', description: 'Browse and use available skills' },
+  { name: '/usage', description: 'View token usage and plan limits' },
+  { name: '/copy', args: '[n|all]', description: 'Copy a code block (or the whole last answer)' },
   { name: '/new', description: 'Start a new conversation' },
   { name: '/help', description: 'Show available commands' },
   { name: '/exit', description: 'Exit Lumina' },

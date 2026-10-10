@@ -112,7 +112,7 @@ const READ_ONLY = new Set(['ls', 'tree', 'stat', 'file', 'wc', 'head', 'tail', '
 const NO_ARGS = new Set(['pwd', 'whoami', 'date', 'uname', 'hostname', 'id', 'true', 'false']);
 const GIT_READ = new Set(['status', 'diff', 'log', 'show', 'rev-parse', 'ls-files', 'blame', 'shortlog', 'describe', 'rev-list', 'grep', 'ls-tree', 'cat-file', 'diff-tree', 'name-rev', 'merge-base']);
 const GIT_BAD_FLAG = /^(--output|--ext-diff|--no-index|--open-files-in-pager|-c$|--exec|--upload-pack|--git-dir|--work-tree)/;
-const SAFE_SCRIPT = /^(test|lint|typecheck|type-check|check)(:[\w-]+)?$/;
+const SAFE_SCRIPT = /^(test|lint|typecheck|type-check|check|verify)(:[\w-]+)?$/;
 const AUTO_SCRIPT = /^(build|format|format:check|fmt)(:[\w-]+)?$/;
 const INFRA = new Set(['kubectl', 'helm', 'terraform', 'pulumi', 'ansible', 'ansible-playbook', 'serverless', 'sls', 'vercel', 'netlify', 'fly', 'flyctl', 'heroku', 'gcloud', 'aws', 'az', 'docker', 'podman']);
 const INTERPRETERS = new Set(['sh', 'bash', 'zsh', 'python', 'python3', 'node', 'perl', 'ruby']);
@@ -173,13 +173,13 @@ function runner(prog: string, args: string[]): Verdict | undefined {
   if (prog === 'go') {
     if (extra.some((a) => /^-(exec|toolexec|overlay|modfile)/.test(a))) return ASK('go flag runs external programs');
     if (sub === 'test' || sub === 'vet') return SAFE(`go ${sub}`);
-    if (sub === 'build') return AUTO('go build');
+    if (sub === 'build' || sub === 'fmt') return AUTO(`go ${sub}`);
     if (sub === 'version' && extra.length === 0) return SAFE('go version');
     return undefined;
   }
   if (prog === 'cargo') {
     if (sub === 'test' || sub === 'check' || sub === 'clippy') return SAFE(`cargo ${sub}`);
-    if (sub === 'build') return AUTO('cargo build');
+    if (sub === 'build' || sub === 'fmt') return AUTO(`cargo ${sub}`);
     if (sub === 'publish' || sub === 'login') return DENY(`cargo ${sub}`);
     return undefined;
   }
@@ -194,6 +194,13 @@ function runner(prog: string, args: string[]): Verdict | undefined {
 function segment(words: string[], cwd: string): Verdict {
   const [prog0, ...args] = words;
   const prog = path.basename(prog0);
+  // `caveman shrink -- <cmd>` only compresses <cmd>'s output: judge the wrapped command itself
+  if (prog === 'caveman' && args[0] === 'shrink' && args[1] === '--' && args.length > 2) return segment(args.slice(2), cwd);
+  if (prog === 'gofmt') {
+    const bad = firstBad(args.filter((a) => !a.startsWith('-')), cwd);
+    if (bad) return bad;
+    return args.includes('-w') ? AUTO('gofmt -w rewrites files within the workspace') : SAFE('gofmt without -w only prints');
+  }
   if (prog0.includes('=') && !prog0.startsWith('/')) return ASK('environment assignment prefix');
   if (['sudo', 'su', 'doas', 'sandbox-exec', 'mkfs', 'dd', 'shred', 'passwd', 'chpasswd', 'security'].includes(prog)) return DENY(`${prog}: privileged, destructive or credential operation`);
   if (prog === 'rm' && args.some((a) => /^-\w*[rf]/.test(a) || /^--(recursive|force|no-preserve-root)/.test(a))) return DENY('recursive/forced file removal');

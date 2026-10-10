@@ -1,3 +1,5 @@
+import { CodeBlock, MarkdownLines, Styler, wrapLine } from './text.js';
+
 // eslint-disable-next-line no-control-regex
 const ANSI = /\x1b\[[0-9;?]*[A-Za-z]/g;
 export const visibleLength = (s: string): number => s.replace(ANSI, '').length;
@@ -9,6 +11,8 @@ export interface ScreenOptions {
   /** Cursor-addressable terminal: draw the persistent bottom region. Otherwise plain sequential output. */
   live: boolean;
   color: boolean;
+  /** Styles assistant Markdown in live mode (bold, code, links, bullets). */
+  styler?: Styler;
 }
 
 const HIDE = '\x1b[?25l';
@@ -25,7 +29,10 @@ export class Screen {
   prefix = '';
   private open = false; // a conversation line is in progress
   private partial = ''; // live mode: text of that line so far
-  private pending: string[] = []; // live mode: completed lines waiting to be committed
+  private pending: { text: string; md: boolean; prefix: number; reset?: boolean }[] = []; // live mode: completed lines waiting to be committed
+  private openMd = false; // the open line is assistant Markdown
+  private openPrefix = 0;
+  private readonly md?: MarkdownLines;
   private status?: string;
   private overlay: string[] = [];
   private input: InputView = { rows: [''], cursor: { row: 0, col: 0 } };
@@ -36,7 +43,27 @@ export class Screen {
   private scheduled = false;
   private stopped = false;
 
-  constructor(private readonly out: NodeJS.WritableStream & { columns?: number }, private readonly opts: ScreenOptions) {}
+  constructor(private readonly out: NodeJS.WritableStream & { columns?: number }, private readonly opts: ScreenOptions) {
+    if (opts.styler) this.md = new MarkdownLines(opts.styler);
+  }
+
+  /** Forget Markdown state (e.g. an unclosed code fence) between turns. */
+  // queued, not immediate: lines already written but not yet rendered must still see the current fence state
+  resetMarkdown(): void { if (this.opts.live) { this.pending.push({ text: '', md: false, prefix: 0, reset: true }); this.request(); } }
+
+  /** Committed lines: Markdown styled (assistant text only) and word-wrapped with a hanging indent. */
+  private format(lines: { text: string; md: boolean; prefix: number; reset?: boolean }[]): string[] {
+    return lines.flatMap((l) => {
+      if (l.reset) { this.md?.reset(); return []; }
+      if (!l.md || !this.md) return wrapLine(l.text, this.width);
+      const r = this.md.format(l.text, l.prefix);
+      if (!r) return [];
+      return r.verbatim ? [r.text] : wrapLine(r.text, this.width); // code: exact text, the terminal wraps it natively
+    });
+  }
+
+  /** Fenced code blocks from assistant answers this session (live mode only). */
+  get codeBlocks(): CodeBlock[] { return this.md?.blocks ?? []; }
 
   get live(): boolean { return this.opts.live; }
   get columns(): number { return this.out.columns || 80; }
@@ -48,8 +75,9 @@ export class Screen {
   private rule(): string { return this.dim('─'.repeat(this.width)); }
 
   // ---- conversation ------------------------------------------------------------------------------
-  write(text: string): void {
+  write(text: string, opts: { markdown?: boolean } = {}): void {
     if (this.stopped || !text) return;
+    const md = Boolean(opts.markdown);
     const clean = text.replace(/\r/g, '');
     if (!this.opts.live) {
       const lines = clean.split('\n');
@@ -62,17 +90,18 @@ export class Screen {
     const parts = clean.split('\n');
     parts.forEach((chunk, i) => {
       if (chunk) {
-        if (!this.open) { this.partial = this.prefix; this.open = true; }
+        if (!this.open) { this.partial = this.prefix; this.open = true; this.openMd = md; this.openPrefix = this.prefix.length; }
         this.partial += chunk;
-        // a very long unbroken line is committed in terminal-wide pieces so the live region stays small
-        while (visibleLength(this.partial) > this.width * 3) {
+        // a very long unbroken status line is committed in terminal-wide pieces so the live region stays small
+        // (assistant text is never split: code must stay copyable; its preview is clipped in compose())
+        while (!this.openMd && visibleLength(this.partial) > this.width * 3) {
           const cut = this.partial.lastIndexOf(' ', this.width);
           const at = cut > this.prefix.length ? cut : this.width;
-          this.pending.push(this.partial.slice(0, at));
+          this.pending.push({ text: this.partial.slice(0, at), md: this.openMd, prefix: this.openPrefix });
           this.partial = this.prefix + this.partial.slice(at).trimStart();
         }
       }
-      if (i < parts.length - 1) { this.pending.push(this.open ? this.partial : ''); this.partial = ''; this.open = false; }
+      if (i < parts.length - 1) { this.pending.push({ text: this.open ? this.partial : '', md: this.open ? this.openMd : md, prefix: this.open ? this.openPrefix : 0 }); this.partial = ''; this.open = false; }
     });
     this.request();
   }
@@ -98,7 +127,11 @@ export class Screen {
 
   private compose(): { rows: string[]; cursor: { row: number; col: number } } {
     const rows: string[] = [];
-    if (this.open) { for (let i = 0; i < this.partial.length || i === 0; i += this.width) rows.push(this.partial.slice(i, i + this.width)); }
+    if (this.open) {
+      const parts: string[] = [];
+      for (let i = 0; i < this.partial.length || i === 0; i += this.width) parts.push(this.partial.slice(i, i + this.width));
+      rows.push(...parts.slice(-3)); // preview of the line being streamed: last 3 rows at most
+    }
     if (this.status !== undefined) rows.push(this.status);
     rows.push(...this.overlay);
     rows.push(this.rule());
@@ -117,11 +150,12 @@ export class Screen {
       if (r < cur) out += `\x1b[${cur - r}A`; else if (r > cur) out += `\x1b[${r - cur}B`;
       cur = r;
     };
-    if (this.pending.length) {
+    const committed = this.pending.length ? this.format(this.pending) : [];
+    this.pending = [];
+    if (committed.length) {
       // commit finished conversation lines above the region, then redraw the region fresh below them
       if (this.prev.length) { move(0); out += '\r\x1b[J'; }
-      out += `${this.pending.join('\n')}\n`;
-      this.pending = [];
+      out += `${committed.join('\n')}\n`;
       this.prev = []; cur = 0;
     }
     const next = this.compose();
@@ -162,10 +196,11 @@ export class Screen {
   stop(): void {
     if (this.stopped) return;
     if (this.opts.live) {
-      if (this.open) { this.pending.push(this.partial); this.partial = ''; this.open = false; }
+      if (this.open) { this.pending.push({ text: this.partial, md: this.openMd, prefix: this.openPrefix }); this.partial = ''; this.open = false; }
       let out = '';
       if (this.prev.length) { out += `${this.curRow > 0 ? `\x1b[${this.curRow}A` : ''}\r\x1b[J`; }
-      if (this.pending.length) out += `${this.pending.join('\n')}\n`;
+      const committed = this.format(this.pending);
+      if (committed.length) out += `${committed.join('\n')}\n`;
       this.out.write(out + SHOW);
       this.pending = []; this.prev = [];
     }

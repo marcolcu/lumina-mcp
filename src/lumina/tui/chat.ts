@@ -3,7 +3,7 @@ import type { AppServerClient } from '../appserver/client.js';
 export type AppClient = Pick<AppServerClient, 'request' | 'onNotification' | 'onClose' | 'onServerRequest' | 'close'>;
 interface McpElicitation { threadId?: string; serverName: string; message: string; _meta?: { codex_approval_kind?: string; persist?: string[]; tool_params_display?: { name: string; display_name?: string; value: unknown }[] } | null; }
 export type Decision = 'accept' | 'acceptForSession' | 'decline' | 'cancel';
-export interface ApprovalRequest { kind: 'command' | 'fileChange' | 'mcpTool'; summary: string; detail?: string; command?: string; server?: string; tool?: string; cwd?: string | null; network?: boolean; }
+export interface ApprovalRequest { kind: 'command' | 'fileChange' | 'mcpTool'; summary: string; detail?: string; command?: string; server?: string; tool?: string; reason?: string; cwd?: string | null; network?: boolean; }
 // approvalsReviewer 'user' is required: a user config with approvals_reviewer = auto_review would otherwise
 // answer approvals server-side and they would never reach Lumina's prompt (verified against codex 0.162).
 export interface Policy { approvalPolicy: 'on-request' | 'never'; sandbox: 'workspace-write' | 'read-only'; approvalsReviewer?: 'user'; }
@@ -11,7 +11,7 @@ export const DEFAULT_POLICY: Policy = { approvalPolicy: 'on-request', sandbox: '
 export interface Selection { model?: string; effort?: string; }
 export interface ThreadSummary { id: string; preview: string; }
 /** What a finished turn did, kept small: enough to hand off context and detect failures, no file contents. */
-export interface TurnItem { type: string; status?: string; exitCode?: number | null; command?: string; files?: string[]; text?: string }
+export interface TurnItem { type: string; status?: string; exitCode?: number | null; command?: string; files?: string[]; text?: string; tool?: string }
 /** `usage` is the provider-reported usage of this turn alone (difference of the thread's cumulative counters). */
 export interface TurnResult { status: 'completed' | 'interrupted' | 'failed'; error?: string; items?: TurnItem[]; usage?: TokenBreakdown }
 
@@ -44,7 +44,7 @@ export class Chat {
     const command = method === 'item/commandExecution/requestApproval';
     const detail = [p.cwd && command ? `in ${p.cwd}` : '', p.grantRoot ? `grants write access to ${p.grantRoot}` : '', p.reason ?? ''].filter(Boolean).join(' · ');
     const ask = (): Promise<Decision> => this.opts.onApproval
-      ? this.opts.onApproval({ kind: command ? 'command' : 'fileChange', summary: command ? (p.command ?? 'command') : 'apply file changes', detail, command: command ? (p.command ?? undefined) : undefined, cwd: p.cwd, network: Boolean(p.networkApprovalContext) })
+      ? this.opts.onApproval({ kind: command ? 'command' : 'fileChange', summary: command ? (p.command ?? 'command') : 'apply file changes', detail, command: command ? (p.command ?? undefined) : undefined, cwd: p.cwd, network: Boolean(p.networkApprovalContext), reason: p.reason ?? undefined })
       : Promise.resolve('decline');
     // A repeated request for the same item gets the same answer, never a second prompt or response.
     const key = p.itemId ? `${method}:${p.itemId}:${p.approvalId ?? ''}` : '';
@@ -81,10 +81,11 @@ export class Chat {
 
   private async ensureThread(): Promise<string> {
     if (this.threadId) return this.threadId;
-    const res = await this.client.request<{ thread: { id: string }; model: string }>('thread/start', {
+    const res = await this.client.request<{ thread: { id: string }; model: string; sandbox?: unknown }>('thread/start', {
       cwd: this.opts.cwd, ...(this.opts.policy ?? DEFAULT_POLICY),
     });
     this.model = res.model;
+    this.sandbox = res.sandbox;
     return (this.threadId = res.thread.id);
   }
 
@@ -93,6 +94,7 @@ export class Chat {
     if (this.busy) throw new Error('A turn is running');
     this.threadId = undefined;
     this.usage = undefined;
+    this.sandboxOverridden = false;
   }
 
   /** Recent threads for this cwd, newest first. Codex persists them; nothing is stored by Lumina. */
@@ -112,13 +114,19 @@ export class Chat {
   /** Re-attaches to a persisted thread; the server restores the full conversation context. */
   async resume(id: string): Promise<void> {
     if (this.busy) throw new Error('A turn is running');
-    const res = await this.client.request<{ thread: { id: string }; model: string }>('thread/resume', {
+    const res = await this.client.request<{ thread: { id: string }; model: string; sandbox?: unknown }>('thread/resume', {
       threadId: id, cwd: this.opts.cwd, ...(this.opts.policy ?? DEFAULT_POLICY), excludeTurns: true,
     });
     this.threadId = res.thread.id;
     this.model = res.model;
+    this.sandbox = res.sandbox;
+    this.sandboxOverridden = false;
     this.usage = undefined;
   }
+
+  /** The thread's own sandbox policy (from thread/start|resume), restored after a read-only turn. */
+  private sandbox?: unknown;
+  private sandboxOverridden = false;
 
   /** Context carried into the next main-thread turn (e.g. results of a stage that ran on an isolated thread). */
   private carry?: string;
@@ -155,7 +163,7 @@ export class Chat {
    * Runs one turn. `isolated` starts a fresh, ephemeral thread (same cwd, sandbox and approval policy) so the turn does
    * not carry the main conversation's history; the main thread is left untouched.
    */
-  async send(text: string, sel: Selection = {}, skills: { name: string; path: string }[] = [], opts: { isolated?: boolean } = {}): Promise<TurnResult> {
+  async send(text: string, sel: Selection = {}, skills: { name: string; path: string }[] = [], opts: { isolated?: boolean; images?: string[]; readOnly?: boolean } = {}): Promise<TurnResult> {
     if (this.busy) throw new Error('A turn is already running');
     this.busy = true;
     let off: (() => void) | undefined;
@@ -164,6 +172,10 @@ export class Chat {
         ? (await this.client.request<{ thread: { id: string } }>('thread/start', { cwd: this.opts.cwd, ...(this.opts.policy ?? DEFAULT_POLICY), ephemeral: true })).thread.id
         : await this.ensureThread();
       this.activeThread = threadId;
+      // per-turn sandbox (persists in Codex for later turns): read-only for understanding, then restore the thread's own
+      let sandboxOverride = {};
+      if (opts.readOnly) { sandboxOverride = { sandboxPolicy: { type: 'readOnly', networkAccess: false } }; if (!opts.isolated) this.sandboxOverridden = true; }
+      else if (this.sandboxOverridden && !opts.isolated && this.sandbox) { sandboxOverride = { sandboxPolicy: this.sandbox }; this.sandboxOverridden = false; }
       const before = this.totals.get(threadId);
       if (!opts.isolated && this.carry) { text = `${this.carry}\n\n${text}`; this.carry = undefined; }
       const done = new Promise<TurnResult>((resolve) => {
@@ -172,7 +184,7 @@ export class Chat {
         const items: TurnItem[] = [];
         this.client.onClose((e) => resolve({ status: 'failed', error: e.message }));
         off = this.client.onNotification((method, params) => {
-          const p = params as { item?: { type: string; status?: string; exitCode?: number | null; command?: string; changes?: { path?: string }[]; text?: string }; threadId?: string; delta?: string; error?: { message?: string }; willRetry?: boolean; turn?: { id?: string; status: TurnResult['status']; error?: { message?: string } | null } };
+          const p = params as { item?: { type: string; status?: string; exitCode?: number | null; command?: string; changes?: { path?: string }[]; text?: string; tool?: string }; threadId?: string; delta?: string; error?: { message?: string }; willRetry?: boolean; turn?: { id?: string; status: TurnResult['status']; error?: { message?: string } | null } };
           if (p?.threadId !== threadId) return;
           this.opts.onEvent?.(method, params);
           if (method === 'item/agentMessage/delta' && p.delta) this.opts.onDelta(p.delta);
@@ -186,15 +198,17 @@ export class Chat {
           else if (method === 'turn/started' && p.turn?.id) this.turnId = p.turn.id;
           else if (method === 'item/completed' && p.item) {
             const it = p.item;
-            items.push({ type: it.type, status: it.status, exitCode: it.exitCode, command: it.command?.slice(0, 300), files: it.changes?.map((c) => c.path ?? '').filter(Boolean), text: it.type === 'agentMessage' ? it.text?.slice(-2000) : undefined });
+            items.push({ type: it.type, status: it.status, exitCode: it.exitCode, command: it.command?.slice(0, 300), files: it.changes?.map((c) => c.path ?? '').filter(Boolean), text: it.type === 'agentMessage' ? it.text?.slice(-2000) : undefined, tool: it.tool });
           }
           else if (method === 'turn/completed' && p.turn) resolve({ status: p.turn.status, error: p.turn.error?.message ?? lastError, items, usage: total ? diffUsage(total, before) : undefined });
         });
       });
       const started = await this.client.request<{ turn?: { id?: string } }>('turn/start', {
         // explicit `$skill` invocations are passed to Codex as native skill items; Codex loads the SKILL.md itself
-        threadId, input: [{ type: 'text', text, text_elements: [] }, ...skills.map((k) => ({ type: 'skill', name: k.name, path: k.path }))],
+        // pasted images go as native localImage items (Codex reads the file); skills as native skill items
+        threadId, input: [{ type: 'text', text, text_elements: [] }, ...(opts.images ?? []).map((p) => ({ type: 'localImage', path: p })), ...skills.map((k) => ({ type: 'skill', name: k.name, path: k.path }))],
         ...(sel.model ? { model: sel.model } : {}), ...(sel.effort ? { effort: sel.effort } : {}),
+        ...sandboxOverride,
       });
       this.turnId ??= started?.turn?.id;
       return await done;

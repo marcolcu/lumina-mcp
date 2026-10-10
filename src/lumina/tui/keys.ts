@@ -1,6 +1,6 @@
 export type KeyName =
   | 'submit' | 'newline' | 'left' | 'right' | 'up' | 'down' | 'home' | 'end' | 'backspace' | 'delete'
-  | 'interrupt' | 'eof' | 'escape' | 'tab' | 'kill-line-start' | 'kill-line-end' | 'kill-word' | 'word-left' | 'word-right';
+  | 'interrupt' | 'eof' | 'escape' | 'tab' | 'paste-image' | 'kill-line-start' | 'kill-line-end' | 'kill-word' | 'word-left' | 'word-right';
 export type Key = { t: 'text'; s: string } | { t: 'paste'; s: string } | { t: 'key'; name: KeyName };
 
 const PASTE_START = '\x1b[200~';
@@ -16,8 +16,9 @@ function fromCode(code: number, mods: number): Key | undefined {
   if (code === 127) return key(alt ? 'kill-word' : 'backspace');
   if (code === 9) return key('tab');
   if (code === 27) return key('escape');
+  if ((mods & 8) !== 0 && code === 118) return key('paste-image'); // Cmd+V, when the terminal reports it (kitty protocol)
   if (ctrl) {
-    const m: Record<string, KeyName> = { c: 'interrupt', d: 'eof', a: 'home', e: 'end', k: 'kill-line-end', u: 'kill-line-start', w: 'kill-word', j: 'newline' };
+    const m: Record<string, KeyName> = { c: 'interrupt', d: 'eof', a: 'home', e: 'end', k: 'kill-line-end', u: 'kill-line-start', w: 'kill-word', j: 'newline', v: 'paste-image' };
     return m[String.fromCharCode(code)] ? key(m[String.fromCharCode(code)]) : undefined;
   }
   if (alt) return code === 98 ? key('word-left') : code === 102 ? key('word-right') : undefined;

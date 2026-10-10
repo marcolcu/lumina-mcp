@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { RouterConfig, stateDir } from '../smart-codex/config.js';
 import { ModelInfo, resolveModel } from '../smart-codex/models.js';
-import { Route } from '../smart-codex/router.js';
+import { Route, splitPrompt } from '../smart-codex/router.js';
 import { classifyFailure } from '../smart-codex/run.js';
 import { unwrap } from './approval/policy.js';
 import type { Selection, TokenBreakdown, TurnItem, TurnResult } from './tui/chat.js';
@@ -72,6 +72,8 @@ export function planExecution(task: string, route: Route, cfg: RouterConfig, fir
   // the single stage keeps the router's own model/effort unless complexity+risk justify starting higher
   const taskStage = makeStage('task', tier, tier === 'advanced' ? 'high' : first.effort ?? 'medium', tier === 'fast' ? 'straightforward task' : `${route.tier} task (${route.risk} risk)`);
   if (!sc.enabled || sc.execution_strategy === 'direct') return { strategy: 'direct', stages: [taskStage], reviewAfter: false, adaptive: false };
+  // plan on the user's request, not on pasted tickets/docs (their headings would look like many deliverables)
+  if (route.reference_chars > 0) task = splitPrompt(task).instruction;
   const modifies = MODIFY.test(task);
   const reviewAfter = modifies && route.risk === 'high' && CUE.review.test(task) && sc.max_stages >= 2;
   const deliverables = [CUE.design, CUE.tests, CUE.docs, CUE.migration, CUE.review].filter((re) => re.test(task)).length;

@@ -149,7 +149,7 @@ export class Composer {
         case 'submit': this.submit(); break;
         case 'newline': this.editor.insert('\n'); break;
         case 'tab': this.editor.insert('  '); break;
-        case 'escape': break;
+        case 'escape': case 'paste-image': break;
         case 'left': this.editor.move(-1); break;
         case 'right': this.editor.move(1); break;
         case 'up': this.editor.vertical(this.rows(), -1); break;

@@ -114,3 +114,28 @@ describe('MCP tool policy', () => {
     expect(m('get_jira_ticket', 'auto', 'evil-server')).toBe('ask');
   });
 });
+
+describe('real commands reported from a session (caveman wrapper, Go formatting, verify scripts)', () => {
+  const CWD2 = '/Users/x/project/enhart';
+  const ev2 = (command: string, mode: ApprovalMode, commandCwd?: string) => evaluate({ command, cwd: CWD2, mode, commandCwd });
+  const verify = `/bin/zsh -lc "'/opt/homebrew/bin/caveman' shrink -- npm run verify:backend"`;
+  const gofmt = "/bin/zsh -lc 'gofmt -w test/sso/handler/logging_test.go && go test ./test/sso/handler ./test/config'";
+  it('auto mode runs them without asking', () => {
+    expect(ev2(verify, 'auto', CWD2).decision).toBe('approve');
+    expect(ev2(gofmt, 'auto', `${CWD2}/backend`).decision).toBe('approve');
+  });
+  it('smart approves the read/test one, asks for the file-rewriting formatter; manual always asks', () => {
+    expect(ev2(verify, 'smart', CWD2).decision).toBe('approve');
+    expect(ev2(gofmt, 'smart', `${CWD2}/backend`).decision).toBe('ask');
+    expect(ev2(verify, 'manual', CWD2).decision).toBe('ask');
+  });
+  it('the caveman wrapper never hides what it wraps', () => {
+    expect(ev2("/bin/zsh -lc \"'/opt/homebrew/bin/caveman' shrink -- rm -rf build\"", 'auto').decision).toBe('deny');
+    expect(ev2("/bin/zsh -lc \"'/opt/homebrew/bin/caveman' shrink -- curl https://x.dev\"", 'auto').decision).toBe('ask');
+    expect(ev2('caveman shrink npm test', 'auto').decision).toBe('ask'); // not the exact wrapper form
+    expect(ev2('gofmt -w ../elsewhere/x.go', 'auto').decision).toBe('ask');
+    expect(ev2('gofmt -l .', 'smart').decision).toBe('approve');
+    expect(ev2('go fmt ./...', 'auto').decision).toBe('approve');
+    expect(ev2('npm run verify:backend -- --watch', 'auto').decision).toBe('ask'); // extra args to a script still ask
+  });
+});

@@ -70,7 +70,19 @@ export class Activity {
   /** Streamed assistant text. */
   text(s: string): void {
     if (this.group && this.active) { if (!this.screen.atLineStart) this.screen.write('\n'); this.flushGroup(); } // finished tool steps precede the answer
-    this.screen.write(s);
+    if (!s) return;
+    // breathing room: a blank line between a block of status lines and the answer text
+    if (this.last === 'line' && this.screen.atLineStart && s.trim()) this.screen.write('\n');
+    if (s.trim()) this.last = 'text';
+    this.screen.write(s, { markdown: this.active });
+  }
+
+  /** A self-contained block (e.g. an approval prompt): separated from what comes before and after. */
+  block(s: string): void {
+    if (!this.screen.atLineStart) this.screen.write('\n');
+    if (this.last !== 'none') this.screen.write('\n');
+    this.screen.write(s.endsWith('\n') ? s : `${s}\n`);
+    this.last = 'line';
   }
 
   /** A permanent one-line notice (e.g. auto-approval) on its own row. */
@@ -78,8 +90,13 @@ export class Activity {
 
   private commit(line: string): void {
     if (!this.screen.atLineStart) this.screen.write('\n');
+    if (this.last === 'text') this.screen.write('\n'); // status lines after prose start a new paragraph
     this.screen.write(`${line}\n`);
+    this.last = 'line';
   }
+
+  /** What was written last in this turn, for paragraph spacing. */
+  private last: 'none' | 'text' | 'line' = 'none';
 
   // ---- lifecycle ---------------------------------------------------------------------------------
   begin(label: string): void {
@@ -90,6 +107,7 @@ export class Activity {
     this.label = label; this.frame = 0;
     this.screen.write(`${this.accent('◆')} Lumina\n`);
     this.screen.prefix = '  ';
+    this.last = 'none';
     this.draw();
     if (this.opts.animate && this.screen.live) {
       this.timer = setInterval(() => { this.frame = (this.frame + 1) % FRAMES.length; this.draw(); }, this.opts.intervalMs ?? 100);
@@ -122,6 +140,7 @@ export class Activity {
     this.stopTimer();
     this.draw();
     if (!this.screen.atLineStart) this.screen.write('\n');
+    if (this.last !== 'none') this.screen.write('\n'); // completion stands apart from the answer
     if (this.hidden > 0) this.screen.write(`${this.dim(`… ${this.hidden} more step${this.hidden === 1 ? '' : 's'}`)}\n`);
     const t = this.elapsed();
     const line = status === 'completed' ? `${this.paint('32', '✓')} Completed in ${t}`
@@ -131,6 +150,8 @@ export class Activity {
     if (detail) this.screen.write(`${this.dim(detail.replace(/\s+/g, ' ').slice(0, 200))}\n`);
     this.screen.prefix = '';
     this.screen.write('\n');
+    this.screen.resetMarkdown();
+    this.last = 'none';
   }
 
   dispose(): void {

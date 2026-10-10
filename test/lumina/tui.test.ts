@@ -41,7 +41,7 @@ class FakeClient implements AppClient {
     if (method === 'skills/list') return { data: [{ cwd: params.cwds?.[0], skills: this.skills, errors: [] }] };
     if (method === 'thread/list') return { data: [{ id: 'abcdef12-0000', preview: 'earlier chat' }, { id: 'zzzz9999-0000', preview: 'older' }] };
     if (method === 'thread/resume') return { thread: { id: params.threadId }, model: 'gpt-6-sol' };
-    if (method === 'thread/start') return params.ephemeral ? { thread: { id: `iso-${++this.iso}` }, model: 'gpt-6-luna' } : { thread: { id: 't1' }, model: 'gpt-6-luna' };
+    if (method === 'thread/start') return params.ephemeral ? { thread: { id: `iso-${++this.iso}` }, model: 'gpt-6-luna' } : { thread: { id: 't1' }, model: 'gpt-6-luna', sandbox: { type: 'workspaceWrite', writableRoots: [], networkAccess: false, excludeTmpdirEnvVar: false, excludeSlashTmp: false } };
     if (method === 'thread/compact/start') { setTimeout(() => this.emit('thread/compacted', { threadId: params.threadId, turnId: 'c' }), 5); return {}; }
     if (method === 'turn/start') {
       const n = ++this.turns;
@@ -563,22 +563,22 @@ describe('Phase 5: layout, welcome, status bar', () => {
     expect(t2.screen().join('\n')).not.toContain('connected');
     await quit(t2);
   });
-  it('persistent composer: separators, placeholder prompt, status bar and hints sit at the bottom', async () => {
+  it('persistent composer: separators, placeholder prompt and the status bar (no command hint line) sit at the bottom', async () => {
     const t = setup(new FakeClient());
     await wait();
-    expect(t.screen().slice(-5)).toEqual([RULE(60), '› Ask Lumina anything...', RULE(60), '  ◉ Auto Routing · GPT-6 Luna ⇄ GPT-6 Sol', '  /model  /reasoning  /approval  /skills  /usage']);
+    expect(t.screen().slice(-4)).toEqual([RULE(60), '› Ask Lumina anything...', RULE(60), '  ◉ Auto Routing · GPT-6 Luna ⇄ GPT-6 Sol']);
     t.input.write('Create auth');
     t.input.write('\x1b[13;2u');
     t.input.write('Add tests');
     await wait();
-    expect(t.screen().slice(-6, -2)).toEqual([RULE(60), '› Create auth', '  Add tests', RULE(60)]);
+    expect(t.screen().slice(-5, -1)).toEqual([RULE(60), '› Create auth', '  Add tests', RULE(60)]);
     t.input.write('\x03'); // Ctrl-C clears the draft when idle
     await quit(t);
   });
   it('status bar follows the actual routing: model, effort, manual overrides and approval mode', async () => {
     const c = new FakeClient();
     const t = setup(c, {}, true, 80);
-    const bar = () => t.screen().at(-2);
+    const bar = () => t.screen().at(-1);
     t.input.write('update the button text\r'); await wait();
     expect(bar()).toBe('  ◉ Auto Routing · GPT-6 Luna · Low');
     t.input.write('Fix payment webhook signature verification\r'); await wait();
@@ -611,11 +611,11 @@ describe('Phase 5: layout, welcome, status bar', () => {
     expect(rows).toContain('› Create authentication module');
     expect(rows).toContain('◆ Lumina');
     expect(rows.find((r) => /^ {2}[◐◓◑◒] Reading files\.\.\. \(\ds\)$/.test(r))).toBeTruthy();
-    expect(rows.slice(-5, -3)).toEqual([RULE(60), '› Ask Lumina anything...']); // composer still anchored during the turn
+    expect(rows.slice(-4, -2)).toEqual([RULE(60), '› Ask Lumina anything...']); // composer still anchored during the turn
     release(); await wait(80);
     rows = t.screen();
     const i = rows.indexOf('◆ Lumina');
-    expect(rows.slice(i, i + 5)).toEqual(['◆ Lumina', '  ✓ Read 1 file', '  Authentication module implemented.', expect.stringMatching(/^ {2}✓ Completed in \ds$/), '']);
+    expect(rows.slice(i, i + 7)).toEqual(['◆ Lumina', '  ✓ Read 1 file', '', '  Authentication module implemented.', '', expect.stringMatching(/^ {2}✓ Completed in \ds$/), '']);
     expect(rows.join('\n')).not.toMatch(/[◐◓◑◒] Reading/);
     await quit(t);
   });
@@ -634,7 +634,7 @@ describe('Phase 5: layout, welcome, status bar', () => {
     t.input.write('go\r'); await wait(80);
     t.input.write('my next question'); await wait(40);
     let rows = t.screen();
-    expect(rows.slice(-5, -1)).toEqual([RULE(60), '› my next question', RULE(60), expect.stringContaining('◉ Auto Routing')]);
+    expect(rows.slice(-4)).toEqual([RULE(60), '› my next question', RULE(60), expect.stringContaining('◉ Auto Routing')]);
     expect(rows).toContain('  first line');
     expect(rows.some((r) => r.includes('second ha'))).toBe(true); // the open line is visible above the composer
     step(); await wait(40);
@@ -654,7 +654,7 @@ describe('Phase 5: layout, welcome, status bar', () => {
       await wait(30);
       c.emit('turn/completed', { threadId, turn: { status: 'completed', error: null } });
     };
-    const t = setup(c);
+    const t = setup(c, {}, true, 100);
     t.input.write('push it\r'); await wait(120);
     const rows = t.screen();
     expect(rows).toContain('⚠ Approval Required'.replace(/^/, '  '));
@@ -673,7 +673,7 @@ describe('Phase 5: layout, welcome, status bar', () => {
     t.input.write('a fairly long draft line that must be re-wrapped'); await wait();
     t.cols(30); await wait();
     const rows = t.screen();
-    expect(rows.slice(-6, -1).every((r) => r.length <= 30)).toBe(true);
+    expect(rows.slice(-5).every((r) => r.length <= 30)).toBe(true);
     expect(rows.join('\n')).toContain('› a fairly long draft');
     t.cols(120); await wait();
     expect(t.screen().join('\n')).toContain('› a fairly long draft line that must be re-wrapped');
@@ -745,7 +745,7 @@ describe('Phase 6: Skills', () => {
     expect(rows.slice(i + 1, i + 4).map((r) => r.replace(/\s+/g, ' '))).toEqual([
       '▸ zebra-greeting project Use when asked to greet the zebra', ' caveman global Ultra-compressed communication mode', ' skill-creator system Create skills']);
     expect(rows.join('\n')).not.toContain('disabled-one');
-    expect(rows.slice(-5)[1]).toBe('› Ask Lumina anything...'); // the composer is still there under the menu
+    expect(rows.slice(-4)[1]).toBe('› Ask Lumina anything...'); // the composer is still there under the menu
     expect(c.requests.filter((r) => r.method === 'skills/list')).toHaveLength(1);
     expect(c.requests.find((r) => r.method === 'skills/list')!.params.cwds).toEqual(['/w']);
     t.input.write('\x1b'); await wait();
@@ -1165,7 +1165,7 @@ describe('staged execution in the TUI (adaptive routing)', () => {
     c.onTurn = async (threadId) => { n++; if (n === 2) await new Promise(() => undefined); complete(c, threadId, [testRun(1)]); };
     const t = setup(c, true);
     t.input.write('Add CSV export with tests\r'); await wait(300);
-    expect(t.screen().at(-2)).toBe('  ◉ Auto Routing · GPT-6 Sol · High');
+    expect(t.screen().at(-1)).toBe('  ◉ Auto Routing · GPT-6 Sol · High');
     expect(t.screen().join('\n')).toMatch(/[◐◓◑◒] 2\/2 GPT-6 Sol · /);
     t.input.write('\x03'); await wait(200);
     expect(turns(c)).toHaveLength(2);
@@ -1296,5 +1296,344 @@ describe('slash-command palette (TTY)', () => {
     s = t.screen();
     expect(s.filter((r) => /^ {2}[❯ ] \//.test(r)).length).toBe(Math.min(8, COMMANDS.length)); // taller terminal: up to 8
     await quit(t);
+  });
+});
+
+describe('readability: markdown, wrapping, spacing, approval block (TTY)', () => {
+  const setup = (client: FakeClient, columns = 60) => {
+    const router = new TurnRouter(LEGACY, '/nonexistent', CAT);
+    const input = new PassThrough();
+    const output = Object.assign(new PassThrough(), { columns, rows: 40, isTTY: true }) as unknown as NodeJS.WriteStream;
+    let text = '';
+    output.on('data', (d) => { text += d.toString(); });
+    return { input, done: runTui(client, '/w', { input, output }, { router }), screen: () => emulate(text), text: () => text };
+  };
+  const wait = (ms = 80) => new Promise((r) => setTimeout(r, ms));
+  const quit = async (t: { input: PassThrough; done: Promise<number> }) => { t.input.write('\x03'); t.input.write('\x04'); await t.done; };
+
+  it('assistant markdown is rendered and long lines wrap inside the indent (no text at column 0)', async () => {
+    const c = new FakeClient();
+    c.reply = () => ['Implementasi selesai.\n\n- **Privasi:** log tidak merekam body, kredensial, token, cookie, atau error upstream mentah. Lihat [logging.md](/Users/x/docs/logging.md).\n'];
+    const t = setup(c);
+    t.input.write('go\r'); await wait();
+    const rows = t.screen();
+    const i = rows.findIndex((r) => r.includes('Privasi'));
+    expect(rows[i]).toMatch(/^ {2}• Privasi: log tidak merekam/);
+    expect(rows[i + 1].startsWith('    ')).toBe(true); // hanging indent under the bullet text
+    expect(rows.join('\n')).not.toContain('**');
+    expect(rows.join('\n')).toContain('Lihat logging.md');
+    expect(rows.every((r) => r.length <= 60)).toBe(true);
+    expect(t.text()).toContain('\x1b[1mPrivasi:\x1b[22m');
+    await quit(t);
+  });
+  it('approval block: reason, unwrapped command, ~ path, blank lines around, then the answer text as its own paragraph', async () => {
+    const c = new FakeClient();
+    c.onTurn = async (threadId) => {
+      await c.serverHandler!('item/commandExecution/requestApproval', { threadId, command: "/bin/zsh -lc 'gofmt -w test/sso/handler/logging_test.go && go test ./test/sso/handler ./test/config'", cwd: `${os.homedir()}/Documents/project/enhart/backend`, reason: 'Boleh jalankan tes SSO/config setelah menyesuaikan ekspektasi respons handler?' });
+      c.emit('item/agentMessage/delta', { threadId, delta: 'Saya lanjut dari implementasi yang sudah ada.\n' });
+      c.emit('turn/completed', { threadId, turn: { status: 'completed', error: null } });
+    };
+    const t = setup(c, 100);
+    t.input.write('go\r'); await wait(150);
+    let rows = t.screen();
+    const a = rows.findIndex((r) => r.includes('Approval Required'));
+    expect(['', '◆ Lumina']).toContain(rows[a - 1]); // a blank line before it, unless it opens the reply
+    expect(rows[a + 1]).toBe('  Boleh jalankan tes SSO/config setelah menyesuaikan ekspektasi respons handler?');
+    expect(rows.slice(a + 2, a + 6)).toEqual(['', '  Command:', '    gofmt -w test/sso/handler/logging_test.go && go test ./test/sso/handler ./test/config', '    in ~/Documents/project/enhart/backend']);
+    expect(rows.join('\n')).not.toContain('/bin/zsh -lc');
+    t.input.write('y\r'); await wait(150);
+    rows = t.screen();
+    const o = rows.findIndex((r) => r.includes('[y] Approve once'));
+    expect(rows[o + 1]).toBe(''); // the answer starts a new paragraph
+    expect(rows[o + 2]).toBe('  Saya lanjut dari implementasi yang sudah ada.');
+    await quit(t);
+  });
+});
+
+describe('code blocks: copyable output and /copy', () => {
+  const setup = (client: FakeClient, copied: string[], tty = true) => {
+    const router = new TurnRouter(LEGACY, '/nonexistent', CAT);
+    const input = new PassThrough();
+    const output = Object.assign(new PassThrough(), { columns: 50, rows: 40, isTTY: tty }) as unknown as NodeJS.WriteStream;
+    let text = '';
+    output.on('data', (d) => { text += d.toString(); });
+    const clipboard = async (x: string) => { copied.push(x); return 'clipboard'; };
+    return { input, done: runTui(client, '/w', { input, output }, { router, clipboard }), screen: () => emulate(text), text: () => text };
+  };
+  const wait = (ms = 80) => new Promise((r) => setTimeout(r, ms));
+  const LONG = `git commit -m "${'x'.repeat(80)}"`;
+  const reply = ['Pakai pesan ini:\n\n```text\nfix(logging): redact startup config values\n```\n\nAtau:\n\n```bash\n', `${LONG}\n`, '  indented line\n```\n'];
+
+  it('code lines are printed flush-left, exactly as written (no indent, no hard wrap), with a /copy header', async () => {
+    const c = new FakeClient();
+    c.reply = () => reply;
+    const t = setup(c, []);
+    t.input.write('give me a commit message\r'); await wait();
+    const rows = t.screen();
+    expect(rows).toContain('  text · /copy 1');
+    expect(rows).toContain('fix(logging): redact startup config values'); // column 0: selecting it copies nothing extra
+    expect(rows).toContain(LONG); // longer than the terminal, still one line (the terminal wraps it, copy stays intact)
+    expect(rows).toContain('  indented line');
+    expect(rows.join('\n')).not.toContain('```');
+    expect(rows).toContain('  bash · /copy 2');
+    t.input.write('\x03'); t.input.write('\x04'); await t.done;
+  });
+  it('/copy copies the last block, /copy N a specific one, /copy all the whole answer; errors are explained', async () => {
+    const c = new FakeClient();
+    c.reply = () => reply;
+    const copied: string[] = [];
+    const t = setup(c, copied);
+    t.input.write('/copy\r'); await wait();
+    expect(t.screen().join('\n')).toContain('no code blocks yet');
+    t.input.write('give me a commit message\r'); await wait();
+    t.input.write('/copy\r'); await wait();
+    t.input.write('/copy 1\r'); await wait();
+    t.input.write('/copy all\r'); await wait();
+    t.input.write('/copy 9\r'); await wait();
+    expect(copied).toEqual([`${LONG}\n  indented line`, 'fix(logging): redact startup config values', reply.join('').trim()]);
+    const out = t.screen().join('\n');
+    expect(out).toContain('✓ copied code block 2 (2 lines) to the clipboard');
+    expect(out).toContain('✓ copied code block 1 (1 line) to the clipboard');
+    expect(out).toContain('no code block 9; there are 2');
+    t.input.write('\x03'); t.input.write('\x04'); await t.done;
+  });
+  it('/copy all works without a TTY (plain output keeps raw Markdown)', async () => {
+    const c = new FakeClient();
+    c.reply = () => reply;
+    const copied: string[] = [];
+    const t = setup(c, copied, false);
+    t.input.write('hi\n'); await wait();
+    t.input.write('/copy all\n'); await wait();
+    expect(copied).toEqual([reply.join('').trim()]);
+    expect(t.text()).toContain('```text');
+    t.input.end(); await t.done;
+  });
+  it('real Codex delta stream (fence split across deltas, no trailing newline) yields exactly one block', async () => {
+    const c = new FakeClient();
+    c.reply = () => ['```', 'text', '\n', 'fix', ':', ' redact', ' startup', ' config', ' values', '\n', '```'];
+    const copied: string[] = [];
+    const t = setup(c, copied);
+    t.input.write('msg\r'); await wait();
+    const out = t.screen().join('\n');
+    expect(out).toContain('text · /copy 1');
+    expect(out).not.toContain('/copy 2');
+    t.input.write('/copy\r'); await wait();
+    expect(copied).toEqual(['fix: redact startup config values']);
+    t.input.write('\x03'); t.input.write('\x04'); await t.done;
+  });
+});
+
+describe('Tab queue and image paste (TTY)', () => {
+  const setup = (client: FakeClient, extra: Record<string, unknown> = {}) => {
+    const router = new TurnRouter(LEGACY, '/nonexistent', CAT);
+    const input = new PassThrough();
+    const output = Object.assign(new PassThrough(), { columns: 90, rows: 40, isTTY: true }) as unknown as NodeJS.WriteStream;
+    let text = '';
+    output.on('data', (d) => { text += d.toString(); });
+    return { input, done: runTui(client, '/w', { input, output }, { router, ...extra }), screen: () => emulate(text) };
+  };
+  const wait = (ms = 60) => new Promise((r) => setTimeout(r, ms));
+  const turns = (c: FakeClient) => c.requests.filter((r) => r.method === 'turn/start').map((r) => r.params.input as { type: string; text?: string; path?: string }[]);
+  const gated = (c: FakeClient) => {
+    const releases: (() => void)[] = [];
+    c.onTurn = async (threadId) => { await new Promise<void>((r) => releases.push(r)); c.emit('turn/completed', { threadId, turn: { status: 'completed', error: null } }); };
+    return () => releases.shift()?.();
+  };
+  const quit = async (t: { input: PassThrough; done: Promise<number> }) => { t.input.write('\x03'); t.input.write('\x04'); await t.done; };
+
+  it('Tab while a turn runs queues the prompt; queued prompts run in order when the turn ends', async () => {
+    const c = new FakeClient();
+    const release = gated(c);
+    const t = setup(c);
+    t.input.write('first\r'); await wait();
+    t.input.write('second'); t.input.write('\t'); await wait();
+    t.input.write('third\nline'); await wait(); t.input.write('\t'); await wait();
+    let s = t.screen();
+    expect(s).toContain('  Queued (2) · runs after the current turn · Ctrl-C clears');
+    expect(s).toContain('  1. second');
+    expect(s).toContain('  2. third …'); // multi-line prompt: first line + …
+    expect(s.join('\n')).toContain('› Ask Lumina anything...'); // the input is free again
+    expect(turns(c)).toHaveLength(1);
+    release(); await wait(100);
+    expect(turns(c).map((x) => x[0].text)).toEqual(['first', 'second']);
+    expect(t.screen()).toContain('  Queued (1) · runs after the current turn · Ctrl-C clears');
+    release(); await wait(100);
+    expect(turns(c).map((x) => x[0].text)).toEqual(['first', 'second', 'third\nline']); // multi-line kept intact
+    release(); await wait(100);
+    s = t.screen();
+    expect(s.join('\n')).not.toContain('Queued');
+    expect(s.filter((r) => r.startsWith('› second'))).toHaveLength(1); // echoed once, like a typed prompt
+    await quit(t);
+  });
+  it('Tab when idle simply sends; Tab on an empty input does nothing; queued slash commands run too', async () => {
+    const c = new FakeClient();
+    const t = setup(c);
+    t.input.write('\t'); await wait();
+    expect(turns(c)).toHaveLength(0);
+    t.input.write('hello'); t.input.write('\t'); await wait(100);
+    expect(turns(c).map((x) => x[0].text)).toEqual(['hello']);
+    const release = gated(c);
+    t.input.write('again\r'); await wait();
+    t.input.write('/approval status'); t.input.write('\x1b'); t.input.write('\t'); await wait(); // Esc closes the palette, Tab queues
+    release(); await wait(150);
+    expect(t.screen().join('\n')).toContain('approval mode: manual');
+    await quit(t);
+  });
+  it('Ctrl-C cancels the running turn and clears the queue', async () => {
+    const c = new FakeClient();
+    gated(c);
+    const t = setup(c);
+    t.input.write('long\r'); await wait();
+    t.input.write('queued one'); t.input.write('\t'); await wait();
+    t.input.write('\x03'); await wait(100);
+    expect(t.screen().join('\n')).toContain('queue cleared (1)');
+    expect(t.screen().join('\n')).not.toContain('Queued (');
+    t.input.write('\x03'); expect(await t.done).toBe(130);
+  });
+  it('Ctrl+V pastes a clipboard image as an [Image #n] token; it is sent as a native localImage item', async () => {
+    const c = new FakeClient();
+    let n = 0;
+    const t = setup(c, { readImage: async () => `/tmp/lumina-images/shot-${++n}.png` });
+    t.input.write('what is in'); t.input.write('\x16'); await wait();
+    expect(t.screen().join('\n')).toContain('› what is in [Image #1]');
+    t.input.write('and'); t.input.write('\x16'); await wait();
+    t.input.write('?\r'); await wait(100);
+    expect(turns(c)[0]).toEqual([
+      { type: 'text', text: 'what is in [Image #1] and [Image #2] ?', text_elements: [] },
+      { type: 'localImage', path: '/tmp/lumina-images/shot-1.png' },
+      { type: 'localImage', path: '/tmp/lumina-images/shot-2.png' },
+    ]);
+    expect(t.screen().join('\n')).toContain('images: 2 attached');
+    await quit(t);
+  });
+  it('deleting the token drops the image; no image in the clipboard is explained; pasted image paths attach', async () => {
+    const c = new FakeClient();
+    const img = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'lum-')), 'diagram.png');
+    fs.writeFileSync(img, Buffer.from('89504e47', 'hex'));
+    let has = true;
+    const t = setup(c, { readImage: async () => (has ? '/tmp/x.png' : undefined) });
+    t.input.write('\x16'); await wait();
+    t.input.write('\x15'); t.input.write('no picture\r'); await wait(100); // Ctrl-U removed the token
+    expect(turns(c)[0]).toHaveLength(1);
+    has = false;
+    t.input.write('\x16'); await wait();
+    expect(t.screen().join('\n')).toContain('no image in the clipboard');
+    t.input.write(`\x1b[200~${img}\x1b[201~`); await wait(); // dragging a file into the terminal pastes its path
+    expect(t.screen().join('\n')).toMatch(/› \[Image #2\]/);
+    t.input.write('explain\r'); await wait(100);
+    expect(turns(c)[1].filter((x) => x.type === 'localImage')).toEqual([{ type: 'localImage', path: img }]);
+    t.input.write('\x1b[200~/etc/hosts\x1b[201~'); await wait(); // not an image: ordinary text
+    expect(t.screen().join('\n')).toContain('› /etc/hosts');
+    await quit(t);
+  });
+});
+
+describe('ticket workflow: understand → clarify → implement', () => {
+  const STAGED = ConfigSchema.parse({});
+  const setup = (client: FakeClient, tty = false) => {
+    const router = new TurnRouter(STAGED, '/nonexistent', [...CAT, { slug: 'gpt-6-astra', name: 'GPT-6 Astra', efforts: ['low', 'medium', 'high'] }]);
+    const input = new PassThrough();
+    const output = Object.assign(new PassThrough(), { columns: 120, rows: 40, isTTY: tty }) as unknown as NodeJS.WriteStream;
+    let text = '';
+    output.on('data', (d) => { text += d.toString(); });
+    return { input, done: runTui(client, '/w', { input, output }, { router }), text: () => text, screen: () => emulate(text) };
+  };
+  const wait = (ms = 120) => new Promise((r) => setTimeout(r, ms));
+  const turns = (c: FakeClient) => c.requests.filter((r) => r.method === 'turn/start').map((r) => r.params);
+  const answerWith = (c: FakeClient, answers: { text: string; tool?: string; edit?: boolean }[]) => {
+    let n = 0;
+    c.onTurn = async (threadId) => {
+      const a = answers[Math.min(n++, answers.length - 1)];
+      if (a.tool) c.emit('item/completed', { threadId, item: { type: 'mcpToolCall', tool: a.tool, status: 'completed' } });
+      if (a.edit) c.emit('item/completed', { threadId, item: { type: 'fileChange', changes: [{ path: 'src/hu.ts' }], status: 'completed' } });
+      c.emit('item/agentMessage/delta', { threadId, delta: `${a.text}\n` });
+      c.emit('turn/completed', { threadId, turn: { status: 'completed', error: null } });
+    };
+  };
+
+  it('OpenProject: explain (read-only, light model, fetch once) → correction (read-only, kept) → "okay, implement it" (re-routed, writable, clarifications applied)', async () => {
+    const c = new FakeClient();
+    answerWith(c, [
+      { text: 'OP-559 asks to move a handling unit (HU) between bays. Ambiguous: what happens on cancel?', tool: 'get_openproject_work_package' },
+      { text: 'Updated: on cancel the HU returns to its previous bay.' },
+      { text: 'Implemented.', edit: true },
+    ]);
+    const t = setup(c);
+    t.input.write('Check OP-559 and explain what you understand.\n'); await wait();
+    let ts = turns(c);
+    expect(ts[0]).toMatchObject({ model: 'gpt-6-luna', effort: 'medium', sandboxPolicy: { type: 'readOnly', networkAccess: false } });
+    expect(ts[0].input[0].text).toContain('Fetch OpenProject work package 559 once with the lumina-mcp tool get_openproject_work_package');
+    expect(ts[0].input[0].text).toContain('Do not modify any files');
+    expect(t.text()).toContain('Ticket: OP-559 · Mode: Understanding · Model: GPT-6 Luna · Reasoning: Medium · read-only');
+    expect(c.requests.filter((r) => r.method === 'turn/start')).toHaveLength(1); // no extra stages
+
+    t.input.write('Correct, but the HU must return to its previous bay.\n'); await wait();
+    ts = turns(c);
+    expect(ts[1].sandboxPolicy).toEqual({ type: 'readOnly', networkAccess: false });
+    expect(ts[1].input[0].text).toContain('already in this conversation; do not fetch it again'); // fetched once
+    expect(ts[1].input[0].text).toContain('Do not start implementing');
+    expect(t.text()).toContain('Ticket: OP-559 · Mode: Ready for implementation · Requirements: updated (1 clarification)');
+    expect(t.text().split('\n').find((l) => l.includes('Ready for implementation'))!.startsWith('Ticket: OP-559')).toBe(true); // own line, after the answer
+    expect(t.text().indexOf('Ready for implementation')).toBeGreaterThan(t.text().indexOf('Updated: on cancel'));
+
+    t.input.write('Okay, implement it.\n'); await wait(200);
+    ts = turns(c);
+    expect(ts).toHaveLength(3);
+    expect(ts[2].sandboxPolicy).toEqual({ type: 'workspaceWrite', writableRoots: [], networkAccess: false, excludeTmpdirEnvVar: false, excludeSlashTmp: false }); // writable again
+    expect(ts[2].input[0].text).toContain('implement OP-559 now using the confirmed requirements');
+    expect(ts[2].input[0].text).toContain('1. Correct, but the HU must return to its previous bay.');
+    expect(t.text()).toMatch(/Ticket: OP-559 · Mode: Implementing · Model: GPT-6 \w+ · Reasoning: \w+ · 1 clarification\(s\) applied/);
+    t.input.end(); await t.done;
+  });
+
+  it('a pasted ticket: understanding uses the cheap model at low effort when short, never writes', async () => {
+    const c = new FakeClient();
+    answerWith(c, [{ text: 'The ticket asks to swap the order list endpoint.' }]);
+    const t = setup(c, true);
+    const ticketText = `Jelaskan tiket ini dulu ya\n\nTiket: ORD-482 Migrate order list to v2\nDescription:\nThe order list page calls GET /api/v1/orders and must call /api/v2/orders with cursor pagination.\nAuthentication now needs a Bearer JWT; refunds require admin role; database migration later.\n${'More background about payments and security. '.repeat(8)}`;
+    t.input.write(`\x1b[200~${ticketText}\x1b[201~`); t.input.write('\r'); await wait();
+    const ts = turns(c);
+    expect(ts).toHaveLength(1);
+    expect(ts[0]).toMatchObject({ model: 'gpt-6-luna', effort: 'low', sandboxPolicy: { type: 'readOnly', networkAccess: false } });
+    expect(ts[0].input[0].text).toContain('The ticket text is the one I pasted');
+    t.input.write('\x03'); t.input.write('\x04'); await t.done;
+  });
+
+  it('an explicit implementation request goes straight to work (no confirmation step, not read-only)', async () => {
+    const c = new FakeClient();
+    answerWith(c, [{ text: 'Done.', edit: true }]);
+    const t = setup(c);
+    t.input.write('Kerjakan OP-560 sekarang\n'); await wait();
+    const ts = turns(c);
+    expect(ts).toHaveLength(1);
+    expect(ts[0].sandboxPolicy).toBeUndefined();
+    expect(ts[0].input[0].text).toBe('Kerjakan OP-560 sekarang');
+    expect(t.text()).toContain('Ticket: OP-560 · Mode: Implementing');
+    t.input.end(); await t.done;
+  });
+
+  it('questions during the discussion stay read-only; /new ends the ticket context; normal prompts are unaffected', async () => {
+    const c = new FakeClient();
+    answerWith(c, [{ text: 'Explanation.', tool: 'get_openproject_work_package' }, { text: 'Files: src/hu.ts' }, { text: 'ok' }]);
+    const t = setup(c);
+    t.input.write('Jelaskan OP-559\n'); await wait();
+    t.input.write('file apa saja yang terdampak?\n'); await wait();
+    expect(turns(c)[1].sandboxPolicy).toEqual({ type: 'readOnly', networkAccess: false });
+    t.input.write('/new\n'); await wait(60);
+    t.input.write('update the button text\n'); await wait();
+    expect(turns(c)[2].sandboxPolicy).toBeUndefined();
+    expect(turns(c)[2].input[0].text).toBe('update the button text');
+    t.input.end(); await t.done;
+  });
+
+  it('the status bar shows the ticket state (TTY)', async () => {
+    const c = new FakeClient();
+    answerWith(c, [{ text: 'Explanation.', tool: 'get_openproject_work_package' }, { text: 'Updated.' }]);
+    const t = setup(c, true);
+    t.input.write('Check OP-559 and explain what you understand.\r'); await wait();
+    expect(t.screen().at(-1)).toMatch(/· OP-559: Understanding$/);
+    t.input.write('Yes, but also log the move.\r'); await wait();
+    expect(t.screen().at(-1)).toMatch(/· OP-559: Ready$/);
+    t.input.write('\x03'); t.input.write('\x04'); await t.done;
   });
 });

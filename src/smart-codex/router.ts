@@ -10,6 +10,8 @@ export interface Route {
   complexity_score: number;
   /** Complexity without the risk bonus: how hard the work is, independent of how sensitive the domain is. */
   base_complexity: number;
+  /** Characters of pasted reference material (ticket, docs, code) that were NOT used to judge complexity/risk. */
+  reference_chars: number;
   confidence: number;
   risk: 'low' | 'medium' | 'high';
   model: string;
@@ -24,7 +26,7 @@ export interface Route {
 const LEX = {
   sensitive: /\b(payments?|billing|checkout|stripe|paypal|refunds?|invoices?|ledger|financial|transactions?|auth|authentication|authorization|authori[sz]e|login|passwords?|credentials?|jwt|oauth|sso|rbac|permissions?|security|vulnerabilit\w*|cve|xss|csrf|sql injection|secrets?|encrypt\w*|migrations?|drop table|production data|data integrity|pii|(?:refresh|access|api|auth|bearer|csrf) tokens?)\b/gi,
   hard: /\b(refactor\w*|architect\w*|redesign|restructur\w*|decoupl\w*|monolith|concurren\w*|race conditions?|deadlocks?|distributed|memory leaks?|intermittent|complex|multi-?file|performance|async|rewrite|migrate)\b/gi,
-  normal: /\b(add|implement|create|build|endpoint|api|crud|component|feature|service|fix|bug|tests?|unit|validation|route|handler|hook)\b/gi,
+  normal: /\b(add|implement|create|build|endpoint|api|crud|component|feature|service|fix|bug|tests?|unit|validation|route|handler|hook|ganti|ubah|tambah\w*|perbaiki|buat|hapus|pindah\w*|sesuaikan|integrasi\w*)\b/gi,
   // trivial operations (cosmetic/textual)
   fast: /\b(renam\w*|typos?|spelling|text|copy|label|wording|colou?rs?|styl\w*|css|padding|margin|spacing|font|comments?|readme|docs?|documentation|changelog|translations?|tooltips?|placeholders?|headings?|bump|version|icon)\b/gi,
   // surfaces where a trivial operation cannot change security behavior
@@ -32,9 +34,11 @@ const LEX = {
   // words showing real code logic is touched
   logic: /\b(implement\w*|verif\w*|validat\w*|middleware|handlers?|flow|rotat\w*|signatures?|sign(ing)?|hash\w*|schema|quer(y|ies)|endpoints?|api|logic|guards?|polic(y|ies)|webhooks?|sessions?|refactor\w*|rewrite|encrypt\w*)\b/i,
   feature: /\b(crud|components?|features?|services?|routes?|hooks?|tests?|unit)\b/i,
-  scope: /\b(all|every|entire|whole|across|multiple|throughout|codebase)\b/gi,
+  scope: /\b(all|every|entire|whole|across|multiple|throughout|codebase|semua|seluruh|setiap)\b/gi,
   readOnly: /^\s*(explain|describe|summari[sz]e|list|show|where|how|why|what)\b/i,
-  modify: /\b(implement|fix|add|change|update|refactor|rewrite|remove|delete|create|build|migrate|rotate|replace|patch)\b/i,
+  modify: /\b(implement|fix|add|change|update|refactor|rewrite|remove|delete|create|build|migrate|rotate|replace|patch|ganti|ubah|tambah\w*|perbaiki|buat|hapus)\b/i,
+  // the user explicitly limits the scope ("only one page", "cuma 1 halaman")
+  narrow: /\b(only|just|single|one (page|file|component|screen|endpoint|function)|1 (page|file|halaman|endpoint|komponen)|satu (halaman|file|endpoint|komponen|page)|hanya|cuma|saja|aja)\b/i,
 };
 const INJECTION = /(ignore|disregard|override|bypass)\b.{0,30}\b(rules?|routing|instructions?|policy|tier)|(treat|classify|mark)\b.{0,20}\bas\b.{0,10}\b(fast|trivial|low)|force\s+(tier|fast|low)|system prompt/i;
 const DESTRUCTIVE = /\b(drop|truncate|delete all|rm -rf|wipe|purge|migrations?)\b/i;
@@ -66,32 +70,78 @@ export function gitIntent(task: string): GitIntent | undefined {
 
 const count = (re: RegExp, s: string) => (s.match(re) ?? []).length;
 
+const REF_LABEL = /^\s*(?:\*\*)?(description|deskripsi|ticket|tiket|acceptance criteria|ac|api|endpoints?|request|response|payload|contoh|example|notes?|catatan|context|konteks|spec|specification|dokumentasi|docs?|background|latar belakang|summary|ringkasan)(?:\*\*)?\s*[:：]/i;
+
+/**
+ * Separates what the user asks (instruction) from material pasted for reference (ticket text, API docs, Markdown,
+ * code). Reference = fenced code, Markdown headings/tables/quotes, labelled sections ("Description:", "API:"),
+ * and long paragraphs. Short prompts are all instruction.
+ */
+export function splitPrompt(text: string): { instruction: string; reference: string } {
+  if (text.length <= 600) return { instruction: text, reference: '' };
+  const paragraphs: { text: string; fenced: boolean }[] = [];
+  let buf: string[] = [];
+  let fence = false;
+  const flush = (fenced = false) => { if (buf.join('').trim()) paragraphs.push({ text: buf.join('\n'), fenced }); buf = []; };
+  for (const line of text.split('\n')) {
+    if (/^\s*(```|~~~)/.test(line)) { if (fence) { buf.push(line); flush(true); fence = false; } else { flush(); fence = true; buf.push(line); } continue; }
+    if (fence) { buf.push(line); continue; }
+    if (!line.trim()) { flush(); continue; }
+    buf.push(line);
+  }
+  flush(fence);
+  let inRef = false; // after a labelled section starts, following paragraphs belong to it until a short plain one
+  const parts = paragraphs.map((p) => {
+    const lines = p.text.split('\n');
+    const markdown = /^\s{0,3}(#{1,6}\s|\|.*\||>\s)/m.test(p.text);
+    const labelled = REF_LABEL.test(lines[0]);
+    if (labelled) inRef = true;
+    const long = lines.length >= 6 || p.text.length > 700;
+    const ref = p.fenced || markdown || labelled || long || (inRef && lines.length > 1);
+    if (!ref) inRef = false;
+    return { ...p, ref };
+  });
+  const instruction = parts.filter((p) => !p.ref).map((p) => p.text).join('\n\n').trim();
+  const reference = parts.filter((p) => p.ref).map((p) => p.text).join('\n\n');
+  return instruction ? { instruction, reference } : { instruction: text, reference: '' };
+}
+
+/** Whether a text carries enough intent to be routed on its own (otherwise the whole prompt is used). */
+const hasIntent = (t: string) => count(LEX.normal, t) + count(LEX.hard, t) + count(LEX.fast, t) + count(LEX.sensitive, t) + count(LEX.scope, t) > 0;
+
 export function route(input: RouteInput, cfg: RouterConfig, catalog: ModelInfo[] = loadCatalog()): Route {
-  const text = `${input.task}\n${input.context ?? ''}`.slice(0, 20000);
+  // Long prompts often paste a ticket or API docs next to a short request: judge the REQUEST; the pasted material is
+  // context for the model, not evidence of complexity or risk. Vague requests ("do this ticket") use everything.
+  const split = splitPrompt(input.task);
+  const focused = Boolean(split.reference) && hasIntent(split.instruction);
+  const task = focused ? split.instruction : input.task;
+  const full = `${input.task}\n${input.context ?? ''}`.slice(0, 20000); // safety checks always see everything
+  const text = `${task}\n${input.context ?? ''}`.slice(0, 20000);
   const h = {
     // "security review/audit" names an activity, not a sensitive domain: risk comes from what the code is (auth, payments…)
     sensitive: count(LEX.sensitive, text.replace(/\b(security|keamanan)\s+(review|audit|check|scan|pass)\w*/gi, 'review')), hard: count(LEX.hard, text), normal: count(LEX.normal, text),
     fast: count(LEX.fast, text), scope: count(LEX.scope, text),
   };
   const o = cfg.optimization;
-  const git = gitIntent(input.task);
+  const git = gitIntent(task);
   // git ops need no file hints (and message words would only pull in unrelated files)
   const found = o.minimal_context && git !== 'simple'
-    ? discover(input.task, path.resolve(input.repository ?? process.cwd()), { maxFiles: o.max_context_files, maxScanned: o.max_scanned_files, maxDepth: o.max_analysis_depth, maxReadBytes: o.max_file_read_bytes })
+    ? discover(task, path.resolve(input.repository ?? process.cwd()), { maxFiles: o.max_context_files, maxScanned: o.max_scanned_files, maxDepth: o.max_analysis_depth, maxReadBytes: o.max_file_read_bytes })
     : { files: [], confident: false, components: 0 };
   const files = found.files;
-  const injection = INJECTION.test(text);
-  const words = input.task.trim().split(/\s+/).length;
+  const injection = INJECTION.test(full);
+  const words = task.trim().split(/\s+/).length;
   const reasons: string[] = [];
+  if (focused) reasons.push(`routed on the request; ${split.reference.length} chars of pasted reference used as context only`);
 
   // --- intent: judge the operation and the affected code, not just the domain words ---
-  const logic = LEX.logic.test(input.task);
-  const trivialOp = h.fast > 0 && !logic && h.hard === 0 && h.scope === 0 && !LEX.feature.test(input.task);
+  const logic = LEX.logic.test(task);
+  const trivialOp = h.fast > 0 && !logic && h.hard === 0 && h.scope === 0 && !LEX.feature.test(task);
   let sensitive = h.sensitive > 0;
-  if (sensitive && trivialOp && LEX.safeObject.test(input.task) && !logic) {
+  if (sensitive && trivialOp && LEX.safeObject.test(task) && !logic) {
     sensitive = false;
     reasons.push('sensitive domain mentioned, but change is cosmetic/documentation only');
-  } else if (sensitive && LEX.readOnly.test(input.task) && !LEX.modify.test(input.task)) {
+  } else if (sensitive && LEX.readOnly.test(task) && !LEX.modify.test(task)) {
     sensitive = false;
     h.normal = Math.max(h.normal, 1);
     reasons.push('read-only question about a sensitive domain');
@@ -100,10 +150,14 @@ export function route(input: RouteInput, cfg: RouterConfig, catalog: ModelInfo[]
   if (git === 'simple') { sensitive = false; reasons.push('git operation; commit message is metadata'); }
   else if (git === 'dangerous') { sensitive = true; reasons.push('destructive/history-rewriting git operation'); }
 
+  // an explicitly narrow request ("only this page") lowers complexity unless it names hard work
+  const narrow = LEX.narrow.test(task) && h.hard === 0 && h.scope === 0;
+  if (narrow) reasons.push('narrow scope requested');
   // base complexity excludes sensitivity; dependency spread adds to it
   const spread = found.confident && found.components >= 3 ? 1 : 0;
   const base = Math.max(0, Math.min(10, 2 + Math.min(h.normal, 3) + 3 * Math.min(h.hard, 2) + 2 * Math.min(h.scope, 1)
-    - Math.min(h.fast, 2) + (files.length > 5 && found.confident ? 1 : 0) + spread + (words > 60 ? 1 : 0)));
+    - Math.min(h.fast, 2) + (files.length > 5 && found.confident ? 1 : 0) + spread + (words > 60 ? 1 : 0)
+    - (narrow ? 1 : 0)));
   const score = Math.min(10, base + (sensitive ? 4 : 0));
 
   let tier: Tier;
@@ -146,11 +200,11 @@ export function route(input: RouteInput, cfg: RouterConfig, catalog: ModelInfo[]
   const parallel = /\b(in parallel|independent(ly)? (modules|services|tasks))\b/i.test(text) && (tier === 'hard' || tier === 'critical');
   const requireReview = tier === 'critical' && score >= 8;
   return {
-    tier, complexity_score: score, base_complexity: base, confidence: Math.round(confidence * 100) / 100, risk,
+    tier, complexity_score: score, base_complexity: base, reference_chars: focused ? split.reference.length : 0, confidence: Math.round(confidence * 100) / 100, risk,
     model: resolved.model, reasoning_effort: resolved.effort,
     agent_strategy: parallel && cfg.routing.default_agents > 1 ? 'parallel' : requireReview ? 'single_then_review' : 'single',
     relevant_files: files, require_review: requireReview,
-    escalation_allowed: cfg.escalation.enabled && !DESTRUCTIVE.test(text),
+    escalation_allowed: cfg.escalation.enabled && !DESTRUCTIVE.test(full),
     reason: reasons.join('; '),
   };
 }
