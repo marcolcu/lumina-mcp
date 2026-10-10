@@ -83,6 +83,22 @@ describe('git intent', () => {
   });
 });
 
+describe('UI work on a sensitive page is not security work', () => {
+  it.each([
+    ['pertama saya mau buat [Image #1] di halaman login kalau misalkan input saya ada di password pas saya click "enter" saya mau button Sign In nya ke click juga', 'normal'],
+    ['On the login page, pressing Enter in the password field should click the Sign In button', 'normal'],
+    ['show a loading spinner on the checkout button', 'normal'],
+    ['Change login button color', 'fast'],
+    // the same pages, but real security logic → still critical
+    ['add validation to the login form password field', 'critical'],
+    ['Fix login session expiry', 'critical'],
+    ['Hash passwords with argon2 on the register page', 'critical'],
+    ['store the payment token from the checkout form', 'critical'],
+  ])('%s → %s', (task, tier) => {
+    expect(r(task).tier).toBe(tier);
+  });
+});
+
 describe('model/reasoning selection', () => {
   it('keeps defaults per tier', () => {
     expect([r('update the button text').model, r('update the button text').reasoning_effort]).toEqual(['gpt-6-luna', 'low']);

@@ -70,6 +70,19 @@ export function gitIntent(task: string): GitIntent | undefined {
 
 const count = (re: RegExp, s: string) => (s.match(re) ?? []).length;
 
+// "the login page", "password field", "Sign In button": the sensitive word only says WHERE in the UI the change is.
+const UI_PLACE = /\b(?:(?:halaman|page|form|screen|layar|tampilan|modal|ui|kolom|field|input|tombol|button)\s+(?:(?:saya|ada|di|the|my)\s+){0,3}(?:login|log ?in|sign ?in|sign ?up|register|password|payment|checkout|billing)|(?:login|log ?in|sign ?in|sign ?up|register|password|payment|checkout|billing)\s+(?:page|form|screen|modal|button|field|input|tombol|halaman|ui|view))\b/gi;
+const UI_WORK = /\b(button|tombol|click|klik|enter|keyboard|keydown|focus|fokus|input|field|form|halaman|page|ui|tampilan|style|css|layout|placeholder|label|disabled|loading|spinner|autofocus|tab ?index)\b/i;
+// real security logic: never downgraded
+const SECURITY_LOGIC = /\b(validat\w*|verif\w*|token|session|cookie|hash\w*|encrypt\w*|jwt|oauth|sso|permission|rbac|credential|2fa|mfa|otp|captcha|rate ?limit|lockout|brute|csrf|xss|inject\w*|secret|refund|charge|transaction)\b/i;
+
+/** Sensitive-word count after removing words that only name a UI location (when the work itself is UI behaviour). */
+function sensitiveCount(text: string): number {
+  let t = text.replace(/\b(security|keamanan)\s+(review|audit|check|scan|pass)\w*/gi, 'review');
+  if (UI_WORK.test(t) && !SECURITY_LOGIC.test(t)) t = t.replace(UI_PLACE, ' ui-place ');
+  return count(LEX.sensitive, t);
+}
+
 const REF_LABEL = /^\s*(?:\*\*)?(description|deskripsi|ticket|tiket|acceptance criteria|ac|api|endpoints?|request|response|payload|contoh|example|notes?|catatan|context|konteks|spec|specification|dokumentasi|docs?|background|latar belakang|summary|ringkasan)(?:\*\*)?\s*[:：]/i;
 
 /**
@@ -119,7 +132,7 @@ export function route(input: RouteInput, cfg: RouterConfig, catalog: ModelInfo[]
   const text = `${task}\n${input.context ?? ''}`.slice(0, 20000);
   const h = {
     // "security review/audit" names an activity, not a sensitive domain: risk comes from what the code is (auth, payments…)
-    sensitive: count(LEX.sensitive, text.replace(/\b(security|keamanan)\s+(review|audit|check|scan|pass)\w*/gi, 'review')), hard: count(LEX.hard, text), normal: count(LEX.normal, text),
+    sensitive: sensitiveCount(text), hard: count(LEX.hard, text), normal: count(LEX.normal, text),
     fast: count(LEX.fast, text), scope: count(LEX.scope, text),
   };
   const o = cfg.optimization;
