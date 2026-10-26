@@ -21,6 +21,17 @@ export function ProjectManagementDocs() {
         </p>
       </div>
 
+      <section className="rounded-xl border border-accent/30 bg-accent/5 p-5 my-8">
+        <h2 className="mt-0">{t('docs.projectManagement.release151Title')}</h2>
+        <p className="text-sm text-muted-foreground">{t('docs.projectManagement.release151Intro')}</p>
+        <ul className="text-sm text-foreground/80 mb-0">
+          <li>{t('docs.projectManagement.release151Creation')}</li>
+          <li>{t('docs.projectManagement.release151Comments')}</li>
+          <li>{t('docs.projectManagement.release151AiImages')}</li>
+          <li>{t('docs.projectManagement.release151English')}</li>
+        </ul>
+      </section>
+
       <h2>{t('docs.projectManagement.setupTitle')}</h2>
       <p>
         {t('docs.projectManagement.setupDesc')}
@@ -185,6 +196,85 @@ export function ProjectManagementDocs() {
           </div>
         )}
 
+        {/* Tool 9 */}
+        <div className="p-5 border border-border rounded-xl bg-card">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2">
+            <h3 className="font-mono text-base md:text-lg text-accent m-0">get_jira_ticket_comments</h3>
+            <span className="text-[10px] uppercase tracking-wider font-extrabold px-2 py-0.5 rounded bg-muted border border-border self-start sm:self-auto">Jira</span>
+          </div>
+          <p className="text-xs md:text-sm text-muted-foreground m-0">
+            {t('docs.projectManagement.tools.t9Desc', 'Fetches comment threads and activity history for a specific Jira ticket.')}
+          </p>
+        </div>
+
+        {/* Tool 10 */}
+        <div className="p-5 border border-border rounded-xl bg-card">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2">
+            <h3 className="font-mono text-base md:text-lg text-accent m-0">get_openproject_work_package_comments</h3>
+            <span className="text-[10px] uppercase tracking-wider font-extrabold px-2 py-0.5 rounded bg-muted border border-border self-start sm:self-auto">OpenProject</span>
+          </div>
+          <p className="text-xs md:text-sm text-muted-foreground m-0">
+            {t('docs.projectManagement.tools.t10Desc', 'Fetches comment threads and activity history for a specific OpenProject work package.')}
+          </p>
+        </div>
+
+        {/* Tool 11 */}
+        <div className="p-5 border border-border rounded-xl bg-card">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2">
+            <h3 className="font-mono text-base md:text-lg text-accent m-0">add_jira_comment</h3>
+            <span className="text-[10px] uppercase tracking-wider font-extrabold px-2 py-0.5 rounded bg-muted border border-border self-start sm:self-auto">Jira</span>
+          </div>
+          <p className="text-xs md:text-sm text-muted-foreground m-0">
+            {t('docs.projectManagement.tools.t11Desc', 'Adds a comment to a Jira ticket — used by pm_testing_ticket to report PASS/FAILED results.')}
+          </p>
+        </div>
+
+        {/* Tool 12 */}
+        <div className="p-5 border border-border rounded-xl bg-card">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2">
+            <h3 className="font-mono text-base md:text-lg text-accent m-0">add_openproject_work_package_comment</h3>
+            <span className="text-[10px] uppercase tracking-wider font-extrabold px-2 py-0.5 rounded bg-muted border border-border self-start sm:self-auto">OpenProject</span>
+          </div>
+          <p className="text-xs md:text-sm text-muted-foreground m-0">
+            {t('docs.projectManagement.tools.t12Desc', 'Adds a comment to an OpenProject work package — used by pm_testing_ticket to report PASS/FAILED results.')}
+          </p>
+        </div>
+
+        {/* Tool 13 */}
+        <div className="p-5 border border-border rounded-xl bg-card">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2">
+            <h3 className="font-mono text-base md:text-lg text-accent m-0">add_trello_comment</h3>
+            <span className="text-[10px] uppercase tracking-wider font-extrabold px-2 py-0.5 rounded bg-muted border border-border self-start sm:self-auto">Trello</span>
+          </div>
+          <p className="text-xs md:text-sm text-muted-foreground m-0">
+            {t('docs.projectManagement.tools.t13Desc', 'Adds a comment to a Trello card — used by pm_testing_ticket to report PASS/FAILED results.')}
+          </p>
+        </div>
+
+        {/* Tool 14 */}
+        <div className="p-5 border border-border rounded-xl bg-card">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2">
+            <h3 className="font-mono text-base md:text-lg text-accent m-0">add_trello_attachment</h3>
+            <span className="text-[10px] uppercase tracking-wider font-extrabold px-2 py-0.5 rounded bg-muted border border-border self-start sm:self-auto">Trello</span>
+          </div>
+          <p className="text-xs md:text-sm text-muted-foreground m-0">
+            {t('docs.projectManagement.tools.t14Desc', 'Attaches a file, such as a failure screenshot, to a Trello card.')}
+          </p>
+        </div>
+
+        {/* Tool 15 */}
+        {showGithubIssue && (
+          <div className="p-5 border border-border rounded-xl bg-card">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2">
+              <h3 className="font-mono text-base md:text-lg text-accent m-0">add_github_issue_comment</h3>
+              <span className="text-[10px] uppercase tracking-wider font-extrabold px-2 py-0.5 rounded bg-muted border border-border self-start sm:self-auto">GitHub</span>
+            </div>
+            <p className="text-xs md:text-sm text-muted-foreground m-0">
+              {t('docs.projectManagement.tools.t15Desc', 'Adds a comment to a GitHub issue — used by pm_testing_ticket to report PASS/FAILED results.')}
+            </p>
+          </div>
+        )}
+
       </div>
 
       <hr className="my-10 border-border" />
@@ -238,6 +328,14 @@ export function ProjectManagementDocs() {
           <p className="text-xs md:text-sm text-muted-foreground mb-4">
             {t('docs.projectManagement.prompts.p4Desc', 'Digest raw feature requests and structure them into Big Tech-standard tickets.')}
           </p>
+          <div className="p-4 rounded-lg border border-emerald-500/20 bg-emerald-500/5 mb-4">
+            <h4 className="text-xs font-bold text-emerald-500 uppercase tracking-wider m-0">
+              {t('docs.projectManagement.prompts.p4TestCasesTitle', 'New: Auto-Generated QA Test Cases')}
+            </h4>
+            <p className="text-xs md:text-sm text-muted-foreground mt-1.5 mb-0">
+              {t('docs.projectManagement.prompts.p4TestCasesDesc', 'Every generated ticket now includes a QA-ready Test Cases section derived directly from its Acceptance Criteria, so reviewers get a consistent, copy-paste-ready test plan regardless of who wrote the ticket.')}
+            </p>
+          </div>
           <span className="text-[10px] uppercase font-extrabold text-muted-foreground tracking-wider block mb-2">{t('docs.projectManagement.prompts.exampleUsage')}</span>
           <div className="flex flex-col gap-2">
             <div className="bg-muted p-3 rounded-lg font-mono text-sm border border-border/50 text-foreground overflow-x-auto">
@@ -252,6 +350,33 @@ export function ProjectManagementDocs() {
             <div className="bg-muted p-3 rounded-lg font-mono text-sm border border-border/50 text-foreground overflow-x-auto">
               /pm_create_ticket "{t('docs.projectManagement.prompts.p4QueryGithub', 'Create a github issue about fixing the memory leak.')}"
             </div>
+          </div>
+        </div>
+
+        {/* Prompt 5 */}
+        <div className="p-6 border border-border rounded-xl bg-card">
+          <h3 className="font-mono text-lg text-emerald-500 m-0 mb-2">/dev_check_comment</h3>
+          <p className="text-xs md:text-sm text-muted-foreground mb-4">
+            {t('docs.projectManagement.prompts.p5Desc', 'Analyze comments, activity logs, and reviewer feedback on tickets (Jira, OpenProject, GitHub, Trello) as a Senior Software Developer.')}
+          </p>
+          <span className="text-[10px] uppercase font-extrabold text-muted-foreground tracking-wider block mb-2">{t('docs.projectManagement.prompts.exampleUsage')}</span>
+          <div className="bg-muted p-3 rounded-lg font-mono text-sm border border-border/50 text-foreground overflow-x-auto">
+            /dev_check_comment "{t('docs.projectManagement.prompts.p5Query', 'Review comments and discussions on Jira ticket PRJ-100.')}"
+          </div>
+        </div>
+
+        {/* Prompt 6 */}
+        <div className="p-6 border border-border rounded-xl bg-card">
+          <h3 className="font-mono text-lg text-emerald-500 m-0 mb-2">/pm_testing_ticket</h3>
+          <p className="text-xs md:text-sm text-muted-foreground mb-4">
+            {t(
+              'docs.projectManagement.prompts.p6Desc',
+              'Fetch a Jira, OpenProject, Trello, or GitHub Issue ticket, derive test steps from its Acceptance Criteria/Test Cases, execute them against a target website using your browser automation tooling, and post a PASS/FAILED result (with a screenshot on failure) back to the ticket.',
+            )}
+          </p>
+          <span className="text-[10px] uppercase font-extrabold text-muted-foreground tracking-wider block mb-2">{t('docs.projectManagement.prompts.exampleUsage')}</span>
+          <div className="bg-muted p-3 rounded-lg font-mono text-sm border border-border/50 text-foreground overflow-x-auto">
+            /pm_testing_ticket "{t('docs.projectManagement.prompts.p6Query', 'ticket_url=https://github.com/owner/repo/issues/25 website_url=https://staging.example.com')}"
           </div>
         </div>
 

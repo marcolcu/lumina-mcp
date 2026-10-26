@@ -1,0 +1,37 @@
+name: Promote npm latest tag
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Published lumina-mcp version to promote (for example, 1.5.4)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  promote:
+    name: Promote published version
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js for npm Trusted Publishing
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+
+      - name: Use npm CLI with Trusted Publishing support
+        run: npm install --global npm@latest
+
+      - name: Promote version to latest
+        env:
+          VERSION: ${{ inputs.version }}
+        run: npm dist-tag add "lumina-mcp@$VERSION" latest

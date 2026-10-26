@@ -1,20 +1,28 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const { mockGetTicket, mockCreateTicket } = vi.hoisted(() => ({
-  mockGetTicket: vi.fn(),
-  mockCreateTicket: vi.fn(),
-}));
+const { mockGetTicket, mockCreateTicket, mockGetTicketComments, mockAddComment } = vi.hoisted(
+  () => ({
+    mockGetTicket: vi.fn(),
+    mockCreateTicket: vi.fn(),
+    mockGetTicketComments: vi.fn(),
+    mockAddComment: vi.fn(),
+  }),
+);
 
 vi.mock('../../../../src/tools/projectmanagement/jira/repository/jira.repository.js', () => ({
   jiraRepository: {
     getTicket: mockGetTicket,
     createTicket: mockCreateTicket,
+    getTicketComments: mockGetTicketComments,
+    addComment: mockAddComment,
   },
 }));
 
 import {
   getJiraTicket,
   createJiraTicket,
+  getJiraTicketComments,
+  addJiraComment,
 } from '../../../../src/tools/projectmanagement/jira/service/jira.service.js';
 
 describe('JiraService', () => {
@@ -125,6 +133,91 @@ describe('JiraService', () => {
       await expect(createJiraTicket('PRJ', 'Title', '')).rejects.toThrow(
         'Jira projectKey, summary, and issueType are required to create a ticket.',
       );
+    });
+  });
+
+  describe('getJiraTicketComments', () => {
+    it('should call repository.getTicketComments when arguments are valid', async () => {
+      mockGetTicketComments.mockResolvedValueOnce({ comments: [] });
+
+      const result = await getJiraTicketComments('PRJ-1', 'mydomain', 'myemail', 'mytoken', 0, 10);
+
+      expect(mockGetTicketComments).toHaveBeenCalledWith(
+        'PRJ-1',
+        'mydomain',
+        'myemail',
+        'mytoken',
+        0,
+        10,
+      );
+      expect(result).toEqual({ comments: [] });
+    });
+
+    it('should throw error if domain is missing', async () => {
+      await expect(getJiraTicketComments('PRJ-1', undefined, 'myemail', 'mytoken')).rejects.toThrow(
+        'Jira domain is required',
+      );
+    });
+  });
+
+  describe('addJiraComment', () => {
+    it('should call repository.addComment when arguments are valid', async () => {
+      mockAddComment.mockResolvedValueOnce({ id: 'c1' });
+
+      const result = await addJiraComment(
+        'PRJ-1',
+        'PASS: verified',
+        'mydomain',
+        'myemail',
+        'mytoken',
+      );
+
+      expect(mockAddComment).toHaveBeenCalledWith(
+        'PRJ-1',
+        'PASS: verified',
+        'mydomain',
+        'myemail',
+        'mytoken',
+      );
+      expect(result).toEqual({ id: 'c1' });
+    });
+
+    it('should fallback to env variables if domain/email/token are omitted', async () => {
+      process.env.JIRA_DOMAIN = 'envdomain';
+      process.env.JIRA_EMAIL = 'envemail';
+      process.env.JIRA_API_TOKEN = 'envtoken';
+      mockAddComment.mockResolvedValueOnce({ id: 'c2' });
+
+      await addJiraComment('PRJ-1', 'FAILED: step 2');
+
+      expect(mockAddComment).toHaveBeenCalledWith(
+        'PRJ-1',
+        'FAILED: step 2',
+        'envdomain',
+        'envemail',
+        'envtoken',
+      );
+    });
+
+    it('should throw error if issueIdOrKey or comment is missing', async () => {
+      await expect(addJiraComment('', 'text', 'domain', 'email', 'token')).rejects.toThrow(
+        'Jira issueIdOrKey and comment are required to add a comment.',
+      );
+      await expect(addJiraComment('PRJ-1', '', 'domain', 'email', 'token')).rejects.toThrow(
+        'Jira issueIdOrKey and comment are required to add a comment.',
+      );
+    });
+
+    it('should throw error if domain is missing', async () => {
+      await expect(
+        addJiraComment('PRJ-1', 'text', undefined, 'myemail', 'mytoken'),
+      ).rejects.toThrow('Jira domain is required');
+    });
+
+    it('should throw error if email or token is missing', async () => {
+      await expect(
+        addJiraComment('PRJ-1', 'text', 'mydomain', undefined, 'mytoken'),
+      ).rejects.toThrow('Jira email and apiToken are required');
     });
   });
 });

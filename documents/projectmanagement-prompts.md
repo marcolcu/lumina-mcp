@@ -1,6 +1,7 @@
 # Project Management Integration — Prompts & Tools
 
 > **Lumina MCP** provides tools and prompts for integrating with popular project management systems (Jira, Trello, OpenProject, GitHub, ClickUp) through the Model Context Protocol. This allows AI agents to directly ingest ticket requirements and build precisely what was specified.
+> **Lumina MCP** provides tools and prompts for integrating with popular project management systems (Jira, Trello, OpenProject, and GitHub Issues) through the Model Context Protocol. This allows AI agents to directly ingest ticket requirements, build precisely what was specified, and report automated test results back to the ticket.
 
 ---
 
@@ -30,6 +31,21 @@ apiToken: "your_api_token_here"
 ```
 
 **Returns:** Title, description, status, priority, assignee, labels, comments, epic link, and acceptance criteria.
+
+---
+
+### `get_jira_ticket_comments`
+
+Fetch comments and activity history for a Jira ticket/issue by its ID or Key.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `issueIdOrKey` | `string` | ✅ | Jira issue ID or Key (e.g., `PROJ-123`) |
+| `domain` | `string` | ❌ | Jira workspace domain (e.g., `yourcompany`) |
+| `email` | `string` | ❌ | Email associated with your Jira account |
+| `apiToken` | `string` | ❌ | Your Jira API token |
+| `startAt` | `number` | ❌ | Index of the first item to return for pagination |
+| `maxResults` | `number` | ❌ | Maximum number of items to return per page |
 
 ---
 
@@ -82,6 +98,21 @@ apiKey: "your_openproject_api_key"
 **Returns:** Subject, description, type, status, priority, assignee, due date, and activity/comments.
 
 ---
+
+### `get_openproject_work_package_comments`
+
+Fetch comments, reviews, and activity history for an OpenProject work package by its ID.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `workPackageId` | `string` | ✅ | OpenProject work package ID |
+| `domain` | `string` | ❌ | OpenProject domain |
+| `apiKey` | `string` | ❌ | OpenProject API Key |
+| `offset` | `number` | ❌ | Page number / offset for pagination |
+| `pageSize` | `number` | ❌ | Number of elements per page |
+
+---
+
 
 ### `get_github_issue`
 
@@ -275,6 +306,64 @@ Delete an existing ClickUp comment by its ID.
 |-----------|------|----------|-------------|
 | `commentId` | `string` | ✅ | ClickUp Comment ID to delete |
 | `apiToken` | `string` | ❌ | ClickUp Personal API Token (uses env var `CLICKUP_API_TOKEN` if omitted) |
+### `add_jira_comment`
+
+Add a comment to a Jira ticket/issue.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `issueIdOrKey` | `string` | ✅ | Jira issue ID or Key |
+| `comment` | `string` | ✅ | Comment text to add |
+| `domain` / `email` / `apiToken` | `string` | ❌ | Falls back to `JIRA_DOMAIN` / `JIRA_EMAIL` / `JIRA_API_TOKEN` |
+
+---
+
+### `add_openproject_work_package_comment`
+
+Add a comment to an OpenProject work package.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `workPackageId` | `string` | ✅ | OpenProject Work Package ID |
+| `comment` | `string` | ✅ | Comment text to add |
+| `domain` / `apiKey` | `string` | ❌ | Falls back to `OPENPROJECT_DOMAIN` / `OPENPROJECT_API_KEY` |
+
+---
+
+### `add_trello_comment`
+
+Add a comment to a Trello card.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `cardId` | `string` | ✅ | Trello Card ID or shortlink |
+| `text` | `string` | ✅ | Comment text to add |
+| `apiKey` / `apiToken` | `string` | ❌ | Falls back to `TRELLO_API_KEY` / `TRELLO_API_TOKEN` |
+
+---
+
+### `add_trello_attachment`
+
+Attach a file (e.g. a failure screenshot) to a Trello card.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `cardId` | `string` | ✅ | Trello Card ID or shortlink |
+| `filePath` | `string` | ✅ | Absolute path to the file to attach |
+| `apiKey` / `apiToken` | `string` | ❌ | Falls back to `TRELLO_API_KEY` / `TRELLO_API_TOKEN` |
+
+---
+
+### `add_github_issue_comment`
+
+Add a comment to a GitHub issue.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `owner` / `repo` | `string` | ✅ | Repository owner and name |
+| `issueNumber` | `string` | ✅ | GitHub issue number |
+| `body` | `string` | ✅ | Markdown comment body |
+| `githubToken` | `string` | ❌ | Falls back to `GITHUB_TOKEN` / `GITHUB_PERSONAL_ACCESS_TOKEN` |
 
 ---
 
@@ -372,6 +461,56 @@ Generate a production-grade, highly structured ticket body based on raw context 
 - A direct recommendation with precise arguments to call the relevant `create_*` tool.
 
 ---
+
+### `pm_testing_ticket`
+
+> **Title:** Automated Ticket-Driven Web Testing
+
+Fetch a Jira, OpenProject, Trello, or GitHub Issue ticket, derive test steps from its Acceptance Criteria (and its **Test Cases** section when generated via `pm_create_ticket`), execute those steps against a target website using this client's browser automation tooling (Claude Browser pane, Claude in Chrome, Codex's browser tooling, or Antigravity's browser surface), and post the result back to the ticket.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `command` | `string` | ❌ | `ticket_url`, `website_url`, and optionally `username`/`password` for the site under test |
+
+**Example:**
+```
+/pm_testing_ticket command="ticket_url=https://github.com/owner/repo/issues/25 website_url=https://staging.example.com"
+```
+
+**Behavior:**
+- Detects the ticket platform from `ticket_url` (Jira, OpenProject, Trello, or GitHub Issues) and fetches it via the matching `get_*` tool.
+- Opens `website_url` in the browser, logging in first only if `username`/`password` were provided.
+- Executes each derived test step in order, capturing a screenshot on the first failing step.
+- Posts **PASS** (with a one-line summary per verified step) or **FAILED** (naming the failing step and why) back to the ticket using `add_jira_comment`, `add_openproject_work_package_comment`, `add_trello_comment`, or `add_github_issue_comment`.
+- Attaches the failure screenshot where the platform supports it (`add_trello_attachment`, or the Jira/OpenProject attachment tools); GitHub Issues has no first-party attachment API, so the screenshot path or an externally-hosted image URL is described/embedded in the comment body instead.
+- Never logs or persists `username`/`password` beyond the test run.
+- Returns a clear error if `ticket_url` does not match a supported platform, instead of failing silently.
+
+---
+
+### `dev_check_comment`
+
+> **Title:** Developer Check Comments and Reviews
+
+Fetch and review comments, activity logs, and review feedback for a ticket or issue (Jira, OpenProject, GitHub, Trello). The AI acts as a Senior Developer extracting key decisions, unresolved questions, and next steps from ticket discussions.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `command` | `string` | ❌ | Ticket ID/Key or natural language context (e.g. `PRJ-123` or `#42`) |
+
+**Example:**
+```
+/dev_check_comment command="Check comments and review status for Jira ticket PRJ-123"
+```
+
+**Output includes:**
+- Ticket & Discussion Overview
+- Key Decisions & Requirements Updates
+- Open Questions & Action Items
+- Recommended Next Steps
+
+---
+
 
 ## 🔗 Integration with Orchestration
 

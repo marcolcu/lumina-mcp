@@ -27,6 +27,7 @@ export async function createTrelloCard(
   idMembers?: string,
   apiKey?: string,
   apiToken?: string,
+  attachmentPaths?: string[],
 ): Promise<unknown> {
   const finalKey = apiKey || process.env.TRELLO_API_KEY;
   const finalToken = apiToken || process.env.TRELLO_API_TOKEN;
@@ -41,7 +42,7 @@ export async function createTrelloCard(
     );
   }
 
-  return await trelloRepository.createCard(
+  const card = await trelloRepository.createCard(
     idList,
     name,
     desc,
@@ -52,4 +53,66 @@ export async function createTrelloCard(
     finalKey,
     finalToken,
   );
+
+  if (attachmentPaths?.length) {
+    for (const filePath of attachmentPaths) {
+      await trelloRepository.attachFileToCard(
+        (card as Record<string, unknown>).id as string,
+        filePath,
+        finalKey,
+        finalToken,
+      );
+    }
+  }
+  return card;
+}
+
+export async function addTrelloComment(
+  cardId: string,
+  text: string,
+  apiKey?: string,
+  apiToken?: string,
+  attachmentPaths?: string[],
+): Promise<unknown> {
+  const finalKey = apiKey || process.env.TRELLO_API_KEY;
+  const finalToken = apiToken || process.env.TRELLO_API_TOKEN;
+
+  if (!cardId || !text) {
+    throw new Error('Trello cardId and text are required to add a comment.');
+  }
+
+  if (!finalKey || !finalToken) {
+    throw new Error(
+      'Trello apiKey and apiToken are required. Provide them as arguments or set TRELLO_API_KEY and TRELLO_API_TOKEN.',
+    );
+  }
+
+  if (attachmentPaths?.length) {
+    for (const filePath of attachmentPaths) {
+      await trelloRepository.attachFileToCard(cardId, filePath, finalKey, finalToken);
+    }
+  }
+  return await trelloRepository.addComment(cardId, text, finalKey, finalToken);
+}
+
+export async function addTrelloAttachment(
+  cardId: string,
+  filePath: string,
+  apiKey?: string,
+  apiToken?: string,
+): Promise<unknown> {
+  const finalKey = apiKey || process.env.TRELLO_API_KEY;
+  const finalToken = apiToken || process.env.TRELLO_API_TOKEN;
+
+  if (!cardId || !filePath) {
+    throw new Error('Trello cardId and filePath are required to add an attachment.');
+  }
+
+  if (!finalKey || !finalToken) {
+    throw new Error(
+      'Trello apiKey and apiToken are required. Provide them as arguments or set TRELLO_API_KEY and TRELLO_API_TOKEN.',
+    );
+  }
+
+  return await trelloRepository.attachFileToCard(cardId, filePath, finalKey, finalToken);
 }

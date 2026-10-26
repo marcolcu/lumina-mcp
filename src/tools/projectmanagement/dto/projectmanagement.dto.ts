@@ -77,6 +77,16 @@ export const ProjectManagementPromptSchema = {
   command: z.string().optional().describe('Additional instructions or context'),
 };
 
+export const PmTestingTicketPromptSchema = {
+  command: z
+    .string()
+    .optional()
+    .describe(
+      'ticket_url, website_url, and optionally username/password for the site under test, ' +
+        'e.g. "ticket_url=https://github.com/owner/repo/issues/25 website_url=https://staging.example.com"',
+    ),
+};
+
 export const CreateJiraTicketSchema = {
   domain: z
     .string()
@@ -99,7 +109,7 @@ export const CreateJiraTicketSchema = {
   priority: z.string().describe('Issue priority (e.g., High, Medium, Low)').optional(),
   labels: z.array(z.string()).describe('Array of labels').optional(),
   assigneeAccountId: z.string().describe('Assignee account ID').optional(),
-  attachmentPath: z.string().describe('Absolute path to a file to attach to the ticket').optional(),
+  attachmentPaths: z.array(z.string().min(1)).describe('Absolute paths to files or AI-generated images to attach to the ticket').optional(),
 };
 
 export const CreateTrelloCardSchema = {
@@ -118,6 +128,7 @@ export const CreateTrelloCardSchema = {
   due: z.string().describe('Due date (ISO 8601)').optional(),
   idLabels: z.string().describe('Comma-separated label IDs').optional(),
   idMembers: z.string().describe('Comma-separated member IDs').optional(),
+  attachmentPaths: z.array(z.string().min(1)).describe('Absolute paths to files, screenshots, or AI-generated images to attach to the card').optional(),
 };
 
 export const CreateOpenProjectWorkPackageSchema = {
@@ -137,9 +148,9 @@ export const CreateOpenProjectWorkPackageSchema = {
   description: z.string().describe('Work package description').optional(),
   priority: z.string().describe('Work package priority (e.g., High, Normal, Low)').optional(),
   assignee: z.string().describe('Assignee user href or ID').optional(),
-  attachmentPath: z
-    .string()
-    .describe('Absolute path to a file to attach to the work package')
+  attachmentPaths: z
+    .array(z.string().min(1))
+    .describe('Absolute paths to files or AI-generated images to attach to the work package')
     .optional(),
 };
 
@@ -156,6 +167,10 @@ export const AddOpenProjectWorkPackageCommentSchema = {
     .optional(),
   workPackageId: z.string().min(1).describe('OpenProject Work Package ID'),
   comment: z.string().min(1).describe('Comment text (markdown supported) to add to the work package'),
+  screenshotPaths: z
+    .array(z.string().min(1))
+    .optional()
+    .describe('Optional absolute paths to screenshot images to upload and attach to the work package'),
 };
 
 export const ListClickupTasksSchema = {
@@ -265,4 +280,113 @@ export const CreateGithubIssueSchema = {
   labels: z.array(z.string()).describe('Array of label names').optional(),
   assignees: z.array(z.string()).describe('Array of assignee usernames').optional(),
   milestone: z.number().int().describe('Milestone number').optional(),
+};
+
+export const GetJiraTicketCommentsSchema = {
+  domain: z
+    .string()
+    .describe(
+      'Jira domain prefix (e.g. yourcompany for yourcompany.atlassian.net). Defaults to JIRA_DOMAIN env var if not provided.',
+    )
+    .optional(),
+  email: z
+    .string()
+    .describe('Jira email address. Defaults to JIRA_EMAIL env var if not provided.')
+    .optional(),
+  apiToken: z
+    .string()
+    .describe('Jira API token. Defaults to JIRA_API_TOKEN env var if not provided.')
+    .optional(),
+  issueIdOrKey: z.string().describe('Jira Issue ID or Key (e.g., PRJ-1234)'),
+  startAt: z
+    .number()
+    .int()
+    .describe('The index of the first item to return in a page of results')
+    .optional(),
+  maxResults: z
+    .number()
+    .int()
+    .describe('The maximum number of items to return per page')
+    .optional(),
+};
+
+export const AddJiraCommentSchema = {
+  domain: z
+    .string()
+    .describe(
+      'Jira domain prefix (e.g. yourcompany for yourcompany.atlassian.net). Defaults to JIRA_DOMAIN env var if not provided.',
+    )
+    .optional(),
+  email: z
+    .string()
+    .describe('Jira email address. Defaults to JIRA_EMAIL env var if not provided.')
+    .optional(),
+  apiToken: z
+    .string()
+    .describe('Jira API token. Defaults to JIRA_API_TOKEN env var if not provided.')
+    .optional(),
+  issueIdOrKey: z.string().min(1).describe('Jira Issue ID or Key (e.g., PRJ-1234)'),
+  comment: z.string().min(1).describe('Comment text to add to the ticket'),
+  attachmentPaths: z.array(z.string().min(1)).optional().describe('Optional absolute paths to files or images to attach to the Jira issue'),
+};
+
+
+
+export const AddTrelloCommentSchema = {
+  apiKey: z
+    .string()
+    .describe('Trello API Key. Defaults to TRELLO_API_KEY env var if not provided.')
+    .optional(),
+  apiToken: z
+    .string()
+    .describe('Trello API Token. Defaults to TRELLO_API_TOKEN env var if not provided.')
+    .optional(),
+  cardId: z.string().min(1).describe('Trello Card ID or shortlink'),
+  text: z.string().min(1).describe('Comment text to add to the card'),
+  attachmentPaths: z.array(z.string().min(1)).optional().describe('Optional absolute paths to files or images to attach to the Trello card'),
+};
+
+export const AddTrelloAttachmentSchema = {
+  apiKey: z
+    .string()
+    .describe('Trello API Key. Defaults to TRELLO_API_KEY env var if not provided.')
+    .optional(),
+  apiToken: z
+    .string()
+    .describe('Trello API Token. Defaults to TRELLO_API_TOKEN env var if not provided.')
+    .optional(),
+  cardId: z.string().min(1).describe('Trello Card ID or shortlink'),
+  filePath: z
+    .string()
+    .min(1)
+    .describe('Absolute path to a file (e.g. a screenshot) to attach to the card'),
+};
+
+export const AddGithubIssueCommentSchema = {
+  githubToken: z
+    .string()
+    .describe(
+      'GitHub Personal Access Token. Defaults to GITHUB_TOKEN or GITHUB_PERSONAL_ACCESS_TOKEN env var if not provided.',
+    )
+    .optional(),
+  owner: z.string().min(1).describe('GitHub repository owner (user or organization)'),
+  repo: z.string().min(1).describe('GitHub repository name'),
+  issueNumber: z.string().min(1).describe('GitHub issue number'),
+  body: z.string().min(1).describe('Markdown comment body to add to the issue'),
+};
+
+export const GetOpenProjectWorkPackageCommentsSchema = {
+  domain: z
+    .string()
+    .describe(
+      'OpenProject domain (e.g. openproject.yourcompany.com). Defaults to OPENPROJECT_DOMAIN env var if not provided.',
+    )
+    .optional(),
+  apiKey: z
+    .string()
+    .describe('OpenProject API Key. Defaults to OPENPROJECT_API_KEY env var if not provided.')
+    .optional(),
+  workPackageId: z.string().describe('OpenProject Work Package ID'),
+  offset: z.number().int().describe('Page number or offset for pagination').optional(),
+  pageSize: z.number().int().describe('Number of elements per page').optional(),
 };

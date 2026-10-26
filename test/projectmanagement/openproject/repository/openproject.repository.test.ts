@@ -213,6 +213,82 @@ describe('OpenProjectRepository', () => {
       repository.addTimeEntry('999', 'PT1H', '2026-07-28', 'test.domain.com', 'testapikey'),
     ).rejects.toThrow(
       'Failed to add time entry to OpenProject work package 999: Unprocessable Entity - Invalid activity',
+  it('should fetch OpenProject work package comments successfully', async () => {
+    const mockResponse = { _embedded: { elements: [{ id: 1, comment: { raw: 'Test comment' } }] } };
+    vi.mocked(global.fetch).mockResolvedValue({
+      ok: true,
+      json: async () => mockResponse,
+    } as Response);
+
+    const result = await repository.getWorkPackageComments('1234', 'test.domain.com', 'testapikey');
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      'https://test.domain.com/api/v3/work_packages/1234/activities',
+      expect.objectContaining({
+        method: 'GET',
+        headers: {
+          Accept: 'application/json',
+          Authorization: 'Basic YXBpa2V5OnRlc3RhcGlrZXk=',
+        },
+      }),
+    );
+    expect(result).toEqual(mockResponse);
+  });
+
+  it('should throw an error if fetch work package comments fails', async () => {
+    vi.mocked(global.fetch).mockResolvedValue({
+      ok: false,
+      statusText: 'Not Found',
+      text: async () => 'Work package not found',
+    } as Response);
+
+    await expect(
+      repository.getWorkPackageComments('999', 'test.domain.com', 'testapikey'),
+    ).rejects.toThrow(
+      'Failed to fetch OpenProject work package comments for 999: Not Found - Work package not found',
+    );
+  });
+
+  it('should add a comment to an OpenProject work package successfully', async () => {
+    const mockResponse = { id: 99, comment: { raw: 'PASS: verified' } };
+    vi.mocked(global.fetch).mockResolvedValue({
+      ok: true,
+      json: async () => mockResponse,
+    } as Response);
+
+    const result = await repository.addComment(
+      '1234',
+      'PASS: verified',
+      'test.domain.com',
+      'testapikey',
+    );
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      'https://test.domain.com/api/v3/work_packages/1234/activities',
+      expect.objectContaining({
+        method: 'POST',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          Authorization: 'Basic YXBpa2V5OnRlc3RhcGlrZXk=',
+        },
+        body: JSON.stringify({ comment: { format: 'markdown', raw: 'PASS: verified' } }),
+      }),
+    );
+    expect(result).toEqual(mockResponse);
+  });
+
+  it('should throw an error if adding a comment fails', async () => {
+    vi.mocked(global.fetch).mockResolvedValue({
+      ok: false,
+      statusText: 'Not Found',
+      text: async () => 'Work package not found',
+    } as Response);
+
+    await expect(
+      repository.addComment('999', 'FAILED: step 2', 'test.domain.com', 'testapikey'),
+    ).rejects.toThrow(
+      'Failed to add comment to OpenProject work package 999: Not Found - Work package not found',
     );
   });
 });

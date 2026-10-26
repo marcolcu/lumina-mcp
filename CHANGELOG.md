@@ -5,9 +5,56 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.4] — 2026-10-23
+
+### Changed
+- Updated the Lumina MCP and website package versions to 1.5.4.
+- Updated the website version badges and Project Management release notes to show v1.5.4.
+
+## [1.5.3] — 2026-10-22
+
+### Changed
+- Updated the Lumina MCP and website package versions to 1.5.3.
+- Updated the website version badges and Project Management release notes to show v1.5.3.
+
+## [1.5.1] — 2026-10-22
+
+### Added
+- **Multiple Image and File Attachments**: Jira, Trello, and OpenProject ticket/card creation and comment tools accept arrays of local file paths, including screenshots and AI-generated images saved locally.
+- **English OpenProject Comments**: The OpenProject comment tool instructs AI clients to write comments in English.
+
+## [1.5.0] — 2026-09-13
+
+### Added
+- **Auto-Generated QA Test Cases in `pm_create_ticket`**: Extended the `PM_CREATE_TICKET_PROMPT` in `src/tools/projectmanagement/prompts/index.ts` to always generate a **Test Cases** section (derived from Acceptance Criteria) covering happy path, boundary/edge values, invalid/malformed input, empty/null state, permission/auth, concurrency, and regression, plus accessibility/cross-browser checks for UI-facing tickets and error/status-code/load checks for API-facing tickets. Skipped for `Spike` tickets. Formatted per target platform (Jira ADF-compatible markdown, GitHub/OpenProject GFM, Trello plain text).
+- **`pm_testing_ticket` — Automated Ticket-Driven Web Testing**: New prompt that fetches a Jira, OpenProject, Trello, or GitHub Issue ticket, derives test steps from its Acceptance Criteria (and its Test Cases section when present), executes them against a target website using the client's browser automation tooling, and posts a **PASS**/**FAILED** result back to the ticket — with a screenshot attached on failure where the platform supports it.
+- **Comment-write tools**: Added `add_jira_comment`, `add_openproject_work_package_comment`, and `add_trello_comment` / `add_trello_attachment`, and `add_github_issue_comment` in `src/tools/projectmanagement/*` to close the "missing comment/attachment tool" gap needed for `pm_testing_ticket` to report results back to each platform.
+- **Website Documentation**: Updated the landing page's Project Management section and the `/docs/project-management` page (English and Indonesian) with the new QA Test Cases callout and the `pm_testing_ticket` prompt/tools.
+
+---
+
+## [1.4.1] — 2026-08-01
+
+### Added
+- **Jira & OpenProject Comment Tools**: Added `get_jira_ticket_comments` and `get_openproject_work_package_comments` tools to retrieve comment threads, review activities, and history for Jira tickets and OpenProject work packages.
+- **Developer Comment Review Prompt**: Added `dev_check_comment` prompt to analyze ticket comments and activity logs across Jira, OpenProject, GitHub Issues, and Trello, summarizing key decisions, action items, and recommended next steps.
+
+### Fixed
+- **Type Safety in Tests**: Resolved `'devCheckCall' is possibly 'undefined'` strict nullability warning in `test/projectmanagement/controller/projectmanagement.controller.test.ts`.
+
+---
+
+## [1.4.0] — 2026-07-30
+
+### Added
+- **Compound Engineering & Strict Security Code Review**: Refactored `AI_CODE_REVIEWER_PROMPT` in `src/tools/gitsystem/prompts/index.ts` to evaluate PRs across 5 Compound Engineering lenses (System Design, Scalability, Component Reusability, Resilience, Security) alongside strict OWASP Top 10 security checks, SQL/Command Injection defense, secret exposure scanning, Auth/ACL boundary checks, strict type safety (no `any`), and zero swallowed exceptions.
+- **Multi-File Context Pre-Gathering**: Refactored `CODE_REVIEW_PROMPT` in `src/tools/orchestration/prompts/index.ts` to mandate pre-gathering multi-file structural context, symbol definitions, and related interfaces before running code review.
+- **Unit Testing & Documentation**: Added unit test coverage for prompt content in `test/gitsystem/index.test.ts` and `test/orchestration/service/orchestration.service.test.ts`, and added architectural pattern documentation in `docs/solutions/architecture-patterns/compound-engineering-code-review-integration.md`.
+
 ---
 
 ## [1.3.2] — 2026-07-03
+
 
 ### Added
 - **Gitea Integration**: Added full version control support for Gitea, including tools to create PRs (`create_gitea_pr`), fetch diffs (`get_gitea_pr_diff`), review code (`review_gitea_pr`), and fix PR reviews (`fix_gitea_pr_review`).

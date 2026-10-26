@@ -1,20 +1,26 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const { mockGetCard, mockCreateCard } = vi.hoisted(() => ({
+const { mockGetCard, mockCreateCard, mockAddComment, mockAttachFileToCard } = vi.hoisted(() => ({
   mockGetCard: vi.fn(),
   mockCreateCard: vi.fn(),
+  mockAddComment: vi.fn(),
+  mockAttachFileToCard: vi.fn(),
 }));
 
 vi.mock('../../../../src/tools/projectmanagement/trello/repository/trello.repository.js', () => ({
   trelloRepository: {
     getCard: mockGetCard,
     createCard: mockCreateCard,
+    addComment: mockAddComment,
+    attachFileToCard: mockAttachFileToCard,
   },
 }));
 
 import {
   getTrelloCard,
   createTrelloCard,
+  addTrelloComment,
+  addTrelloAttachment,
 } from '../../../../src/tools/projectmanagement/trello/service/trello.service.js';
 
 describe('TrelloService', () => {
@@ -107,6 +113,73 @@ describe('TrelloService', () => {
       );
       await expect(createTrelloCard('list', '')).rejects.toThrow(
         'Trello idList and name are required to create a card.',
+      );
+    });
+  });
+
+  describe('addTrelloComment', () => {
+    it('should call repository.addComment when arguments are valid', async () => {
+      mockAddComment.mockResolvedValueOnce({ id: 'act1' });
+
+      const result = await addTrelloComment('card1', 'PASS: verified', 'mykey', 'mytoken');
+
+      expect(mockAddComment).toHaveBeenCalledWith('card1', 'PASS: verified', 'mykey', 'mytoken');
+      expect(result).toEqual({ id: 'act1' });
+    });
+
+    it('should fallback to env variables if key/token are omitted', async () => {
+      process.env.TRELLO_API_KEY = 'envkey';
+      process.env.TRELLO_API_TOKEN = 'envtoken';
+      mockAddComment.mockResolvedValueOnce({ id: 'act2' });
+
+      await addTrelloComment('card1', 'FAILED: step 2');
+
+      expect(mockAddComment).toHaveBeenCalledWith('card1', 'FAILED: step 2', 'envkey', 'envtoken');
+    });
+
+    it('should throw error if cardId or text is missing', async () => {
+      await expect(addTrelloComment('', 'text', 'key', 'token')).rejects.toThrow(
+        'Trello cardId and text are required to add a comment.',
+      );
+      await expect(addTrelloComment('card1', '', 'key', 'token')).rejects.toThrow(
+        'Trello cardId and text are required to add a comment.',
+      );
+    });
+
+    it('should throw error if key or token is missing', async () => {
+      await expect(addTrelloComment('card1', 'text', 'key', undefined)).rejects.toThrow(
+        'Trello apiKey and apiToken are required',
+      );
+    });
+  });
+
+  describe('addTrelloAttachment', () => {
+    it('should call repository.attachFileToCard when arguments are valid', async () => {
+      mockAttachFileToCard.mockResolvedValueOnce({ id: 'att1' });
+
+      const result = await addTrelloAttachment('card1', '/tmp/failure.png', 'mykey', 'mytoken');
+
+      expect(mockAttachFileToCard).toHaveBeenCalledWith(
+        'card1',
+        '/tmp/failure.png',
+        'mykey',
+        'mytoken',
+      );
+      expect(result).toEqual({ id: 'att1' });
+    });
+
+    it('should throw error if cardId or filePath is missing', async () => {
+      await expect(addTrelloAttachment('', '/tmp/x.png', 'key', 'token')).rejects.toThrow(
+        'Trello cardId and filePath are required to add an attachment.',
+      );
+      await expect(addTrelloAttachment('card1', '', 'key', 'token')).rejects.toThrow(
+        'Trello cardId and filePath are required to add an attachment.',
+      );
+    });
+
+    it('should throw error if key or token is missing', async () => {
+      await expect(addTrelloAttachment('card1', '/tmp/x.png', 'key', undefined)).rejects.toThrow(
+        'Trello apiKey and apiToken are required',
       );
     });
   });

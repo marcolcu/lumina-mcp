@@ -124,4 +124,48 @@ describe('GithubRepository', () => {
       'Failed to create GitHub issue in myowner/myrepo: Unprocessable Entity - Validation failed',
     );
   });
+
+  it('should add a comment to a GitHub issue successfully', async () => {
+    const mockResponse = { id: 789, body: 'PASS: verified' };
+    vi.mocked(global.fetch).mockResolvedValue({
+      ok: true,
+      json: async () => mockResponse,
+    } as Response);
+
+    const result = await repository.addIssueComment(
+      'myowner',
+      'myrepo',
+      1,
+      'PASS: verified',
+      'mytoken',
+    );
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      'https://api.github.com/repos/myowner/myrepo/issues/1/comments',
+      expect.objectContaining({
+        method: 'POST',
+        headers: {
+          Accept: 'application/vnd.github.v3+json',
+          Authorization: 'Bearer mytoken',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ body: 'PASS: verified' }),
+      }),
+    );
+    expect(result).toEqual(mockResponse);
+  });
+
+  it('should throw an error if adding a comment fails', async () => {
+    vi.mocked(global.fetch).mockResolvedValue({
+      ok: false,
+      statusText: 'Not Found',
+      text: async () => 'Issue does not exist',
+    } as Response);
+
+    await expect(
+      repository.addIssueComment('myowner', 'myrepo', 999, 'FAILED: step 2', 'mytoken'),
+    ).rejects.toThrow(
+      'Failed to add comment to GitHub issue myowner/myrepo#999: Not Found - Issue does not exist',
+    );
+  });
 });

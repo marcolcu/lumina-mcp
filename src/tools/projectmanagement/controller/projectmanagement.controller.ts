@@ -1,14 +1,4 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { getJiraTicket, createJiraTicket } from '../jira/service/jira.service.js';
-import { getTrelloCard, createTrelloCard } from '../trello/service/trello.service.js';
-import {
-  getOpenProjectWorkPackage,
-  getMyOpenProjectWorkPackages,
-  createOpenProjectWorkPackage,
-  addOpenProjectWorkPackageComment,
-  addOpenProjectTimeEntry,
-} from '../openproject/service/openproject.service.js';
-import { getGithubIssue, createGithubIssue } from '../github/service/github.service.js';
 import {
   listClickupTasks,
   getClickupTask,
@@ -18,30 +8,62 @@ import {
   deleteClickupComment,
 } from '../clickup/service/clickup.service.js';
 import {
+  getJiraTicket,
+  createJiraTicket,
+  getJiraTicketComments,
+  addJiraComment,
+} from '../jira/service/jira.service.js';
+import {
+  getTrelloCard,
+  createTrelloCard,
+  addTrelloComment,
+  addTrelloAttachment,
+} from '../trello/service/trello.service.js';
+import {
+  getOpenProjectWorkPackage,
+  createOpenProjectWorkPackage,
+  getOpenProjectWorkPackageComments,
+  addOpenProjectWorkPackageComment,
+} from '../openproject/service/openproject.service.js';
+import {
+  getGithubIssue,
+  createGithubIssue,
+  addGithubIssueComment,
+} from '../github/service/github.service.js';
+import {
   GetJiraTicketSchema,
+  GetJiraTicketCommentsSchema,
   CreateJiraTicketSchema,
+  AddJiraCommentSchema,
   GetTrelloCardSchema,
   CreateTrelloCardSchema,
+  AddTrelloCommentSchema,
+  AddTrelloAttachmentSchema,
   GetOpenProjectWorkPackageSchema,
   GetMyOpenProjectWorkPackagesSchema,
-  CreateOpenProjectWorkPackageSchema,
-  AddOpenProjectWorkPackageCommentSchema,
   AddOpenProjectTimeEntrySchema,
-  GetGithubIssueSchema,
-  CreateGithubIssueSchema,
   ListClickupTasksSchema,
   GetClickupTaskSchema,
   GetClickupTaskCommentsSchema,
   CreateClickupCommentSchema,
   UpdateClickupCommentSchema,
   DeleteClickupCommentSchema,
+  GetOpenProjectWorkPackageCommentsSchema,
+  CreateOpenProjectWorkPackageSchema,
+  AddOpenProjectWorkPackageCommentSchema,
+  GetGithubIssueSchema,
+  CreateGithubIssueSchema,
+  AddGithubIssueCommentSchema,
   ProjectManagementPromptSchema,
+  PmTestingTicketPromptSchema,
 } from '../dto/projectmanagement.dto.js';
 import {
   PM_SUMMARIZE_TICKET_PROMPT,
   PM_BRAINSTORM_PLAN_PROMPT,
   PM_TEST_CATALOG_PROMPT,
   PM_CREATE_TICKET_PROMPT,
+  PM_DEV_CHECK_COMMENT_PROMPT,
+  PM_TESTING_TICKET_PROMPT,
 } from '../prompts/index.js';
 
 const JIRA_FALLBACK_INSTRUCTIONS = `
@@ -95,7 +117,7 @@ export function registerProjectManagementController(server: McpServer) {
     'get_jira_ticket',
     {
       description:
-        'Use when work references a specific Jira key and you need the authoritative requirements, comments, or status before planning or coding. Prefer this over searching local files for copied ticket text. Credentials may be passed or loaded from the environment.',
+        'Fetch a Jira ticket/issue by its ID or Key. Credentials can be passed as parameters or auto-loaded from JIRA_DOMAIN, JIRA_EMAIL, JIRA_API_TOKEN env vars. Falls back to official Atlassian MCP if credentials are not available.',
       inputSchema: GetJiraTicketSchema,
     },
     async ({ issueIdOrKey, domain, email, apiToken }) => {
@@ -125,10 +147,50 @@ export function registerProjectManagementController(server: McpServer) {
   );
 
   server.registerTool(
+    'get_jira_ticket_comments',
+    {
+      description:
+        'Fetch comments and activity history for a Jira ticket/issue by its ID or Key. Credentials can be passed as parameters or auto-loaded from JIRA_DOMAIN, JIRA_EMAIL, JIRA_API_TOKEN env vars.',
+      inputSchema: GetJiraTicketCommentsSchema,
+    },
+    async ({ issueIdOrKey, domain, email, apiToken, startAt, maxResults }) => {
+      try {
+        const comments = await getJiraTicketComments(
+          issueIdOrKey,
+          domain,
+          email,
+          apiToken,
+          startAt,
+          maxResults,
+        );
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(comments, null, 2),
+            },
+          ],
+        };
+      } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        return {
+          isError: true,
+          content: [
+            {
+              type: 'text',
+              text: `Jira Tool Error: ${errorMessage}\n\n${JIRA_FALLBACK_INSTRUCTIONS}`,
+            },
+          ],
+        };
+      }
+    },
+  );
+
+  server.registerTool(
     'get_trello_card',
     {
       description:
-        'Use when work references a specific Trello card ID or shortlink and you need its current description, checklist, or discussion before acting. Prefer this over stale copied notes.',
+        'Fetch a Trello card by its ID or shortlink. Credentials can be passed as parameters or auto-loaded from TRELLO_API_KEY and TRELLO_API_TOKEN env vars. Falls back to official Atlassian/Trello MCP if credentials are not available.',
       inputSchema: GetTrelloCardSchema,
     },
     async ({ cardId, apiKey, apiToken }) => {
@@ -161,7 +223,7 @@ export function registerProjectManagementController(server: McpServer) {
     'get_openproject_work_package',
     {
       description:
-        'Use when work references a specific OpenProject work package and you need its authoritative requirements, status, assignee, or comments before acting. Prefer this over stale copied notes.',
+        'Fetch an OpenProject work package by its ID. Credentials can be passed as parameters or auto-loaded from OPENPROJECT_DOMAIN and OPENPROJECT_API_KEY env vars. Falls back to official OpenProject MCP if credentials are not available.',
       inputSchema: GetOpenProjectWorkPackageSchema,
     },
     async ({ workPackageId, domain, apiKey }) => {
@@ -191,20 +253,26 @@ export function registerProjectManagementController(server: McpServer) {
   );
 
   server.registerTool(
-    'get_my_openproject_work_packages',
+    'get_openproject_work_package_comments',
     {
       description:
-        'Use when the user needs to discover or triage OpenProject work assigned to them and no specific work-package ID is known. Use get_openproject_work_package instead for full details of one known item.',
-      inputSchema: GetMyOpenProjectWorkPackagesSchema,
+        'Fetch comments, reviews, and activity history for an OpenProject work package by its ID. Credentials can be passed as parameters or auto-loaded from OPENPROJECT_DOMAIN and OPENPROJECT_API_KEY env vars.',
+      inputSchema: GetOpenProjectWorkPackageCommentsSchema,
     },
-    async ({ status, domain, apiKey }) => {
+    async ({ workPackageId, domain, apiKey, offset, pageSize }) => {
       try {
-        const wps = await getMyOpenProjectWorkPackages(status, domain, apiKey);
+        const comments = await getOpenProjectWorkPackageComments(
+          workPackageId,
+          domain,
+          apiKey,
+          offset,
+          pageSize,
+        );
         return {
           content: [
             {
               type: 'text',
-              text: JSON.stringify(wps, null, 2),
+              text: JSON.stringify(comments, null, 2),
             },
           ],
         };
@@ -255,11 +323,44 @@ export function registerProjectManagementController(server: McpServer) {
       }
     },
   );
+
+  server.registerTool(
+    'get_github_issue',
+    {
+      description:
+        'Fetch a GitHub issue with enriched context by repository owner, name, and issue number. Returns structured data including issue details, comments, labels, assignees, milestone, and linked pull requests. Fetches comments and timeline events in parallel for performance. Credentials can be passed as parameters or auto-loaded from GITHUB_TOKEN or GITHUB_PERSONAL_ACCESS_TOKEN env vars. Falls back to official GitHub MCP if credentials are not available.',
+      inputSchema: GetGithubIssueSchema,
+    },
+    async ({ owner, repo, issueNumber, githubToken }) => {
+      try {
+        const issue = await getGithubIssue(owner, repo, issueNumber, githubToken);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(issue, null, 2),
+            },
+          ],
+        };
+      } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        return {
+          isError: true,
+          content: [
+            {
+              type: 'text',
+              text: `GitHub Tool Error: ${errorMessage}\n\n${GITHUB_FALLBACK_INSTRUCTIONS}`,
+            },
+          ],
+        };
+      }
+    },
+  );
   server.registerTool(
     'create_jira_ticket',
     {
       description:
-        'Use only when the user explicitly asks to create a Jira issue or has approved publishing a prepared ticket. Do not call while merely drafting or brainstorming ticket content.',
+        'Create a Jira ticket/issue with optional multiple file or image attachments. Compatible with Compound Engineering (ce-plan, ce-work, ce-code-review) tracker-defer system as a ticket creation sink. Credentials can be passed as parameters or auto-loaded from JIRA_DOMAIN, JIRA_EMAIL, JIRA_API_TOKEN env vars. Falls back to official Atlassian MCP if credentials are not available.',
       inputSchema: CreateJiraTicketSchema,
     },
     async ({
@@ -270,7 +371,7 @@ export function registerProjectManagementController(server: McpServer) {
       priority,
       labels,
       assigneeAccountId,
-      attachmentPath,
+      attachmentPaths,
       domain,
       email,
       apiToken,
@@ -284,7 +385,7 @@ export function registerProjectManagementController(server: McpServer) {
           priority,
           labels,
           assigneeAccountId,
-          attachmentPath,
+          attachmentPaths,
           domain,
           email,
           apiToken,
@@ -316,10 +417,10 @@ export function registerProjectManagementController(server: McpServer) {
     'create_trello_card',
     {
       description:
-        'Use only when the user explicitly asks to create a Trello card or has approved publishing prepared card content. Do not call while merely drafting or brainstorming.',
+        'Create a Trello card with optional multiple file or image attachments. Compatible with Compound Engineering (ce-plan, ce-work, ce-code-review) tracker-defer system as a ticket creation sink. Credentials can be passed as parameters or auto-loaded from TRELLO_API_KEY and TRELLO_API_TOKEN env vars. Falls back to official Atlassian/Trello MCP if credentials are not available.',
       inputSchema: CreateTrelloCardSchema,
     },
-    async ({ idList, name, desc, pos, due, idLabels, idMembers, apiKey, apiToken }) => {
+    async ({ idList, name, desc, pos, due, idLabels, idMembers, attachmentPaths, apiKey, apiToken }) => {
       try {
         const card = await createTrelloCard(
           idList,
@@ -331,6 +432,7 @@ export function registerProjectManagementController(server: McpServer) {
           idMembers,
           apiKey,
           apiToken,
+          attachmentPaths,
         );
         return {
           content: [
@@ -359,7 +461,7 @@ export function registerProjectManagementController(server: McpServer) {
     'create_openproject_work_package',
     {
       description:
-        'Use only when the user explicitly asks to create an OpenProject work package or has approved publishing prepared requirements. Do not call while merely drafting.',
+        'Create an OpenProject work package with optional multiple attachments, including screenshots or AI-generated images saved as local files. Credentials can be passed as parameters or auto-loaded from OPENPROJECT_DOMAIN and OPENPROJECT_API_KEY env vars. Falls back to official OpenProject MCP if credentials are not available.',
       inputSchema: CreateOpenProjectWorkPackageSchema,
     },
     async ({
@@ -369,7 +471,7 @@ export function registerProjectManagementController(server: McpServer) {
       description,
       priority,
       assignee,
-      attachmentPath,
+      attachmentPaths,
       domain,
       apiKey,
     }) => {
@@ -381,7 +483,7 @@ export function registerProjectManagementController(server: McpServer) {
           description,
           priority,
           assignee,
-          attachmentPath,
+          attachmentPaths,
           domain,
           apiKey,
         );
@@ -390,85 +492,6 @@ export function registerProjectManagementController(server: McpServer) {
             {
               type: 'text',
               text: JSON.stringify(wp, null, 2),
-            },
-          ],
-        };
-      } catch (error: unknown) {
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        return {
-          isError: true,
-          content: [
-            {
-              type: 'text',
-              text: `OpenProject Tool Error: ${errorMessage}\n\n${OPENPROJECT_FALLBACK_INSTRUCTIONS}`,
-            },
-          ],
-        };
-      }
-    },
-  );
-
-  server.registerTool(
-    'add_openproject_work_package_comment',
-    {
-      description:
-        'Use only when the user explicitly wants to publish a comment to an existing OpenProject work package. Do not use for local notes or an unapproved draft.',
-      inputSchema: AddOpenProjectWorkPackageCommentSchema,
-    },
-    async ({ workPackageId, comment, domain, apiKey }) => {
-      try {
-        const result = await addOpenProjectWorkPackageComment(
-          workPackageId,
-          comment,
-          domain,
-          apiKey,
-        );
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
-      } catch (error: unknown) {
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        return {
-          isError: true,
-          content: [
-            {
-              type: 'text',
-              text: `OpenProject Tool Error: ${errorMessage}\n\n${OPENPROJECT_FALLBACK_INSTRUCTIONS}`,
-            },
-          ],
-        };
-      }
-    },
-  );
-
-  server.registerTool(
-    'add_openproject_time_entry',
-    {
-      description:
-        'Use only when the user explicitly asks to record spent time on an OpenProject work package. Accepts decimal hours or an ISO 8601 duration; do not infer or submit time without confirmation.',
-      inputSchema: AddOpenProjectTimeEntrySchema,
-    },
-    async ({ workPackageId, hours, spentOn, comment, activityId, domain, apiKey }) => {
-      try {
-        const timeEntry = await addOpenProjectTimeEntry(
-          workPackageId,
-          hours,
-          spentOn,
-          comment,
-          activityId,
-          domain,
-          apiKey,
-        );
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(timeEntry, null, 2),
             },
           ],
         };
@@ -529,6 +552,221 @@ export function registerProjectManagementController(server: McpServer) {
     },
   );
 
+
+  server.registerTool(
+    'create_github_issue',
+    {
+      description:
+        'Create a GitHub issue. Compatible with Compound Engineering (ce-plan, ce-work, ce-code-review) tracker-defer system as a ticket creation sink. Credentials can be passed as parameters or auto-loaded from GITHUB_TOKEN or GITHUB_PERSONAL_ACCESS_TOKEN env vars. Falls back to official GitHub MCP if credentials are not available.',
+      inputSchema: CreateGithubIssueSchema,
+    },
+    async ({ owner, repo, title, body, labels, assignees, milestone, githubToken }) => {
+      try {
+        const issue = await createGithubIssue(
+          owner,
+          repo,
+          title,
+          body,
+          labels,
+          assignees,
+          milestone,
+          githubToken,
+        );
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(issue, null, 2),
+            },
+          ],
+        };
+      } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        return {
+          isError: true,
+          content: [
+            {
+              type: 'text',
+              text: `GitHub Tool Error: ${errorMessage}\n\n${GITHUB_FALLBACK_INSTRUCTIONS}`,
+            },
+          ],
+        };
+      }
+    },
+  );
+
+  server.registerTool(
+    'add_jira_comment',
+    {
+      description:
+        'Add a comment to a Jira ticket/issue with optional multiple file or image attachments. Credentials can be passed as parameters or auto-loaded from JIRA_DOMAIN, JIRA_EMAIL, JIRA_API_TOKEN env vars.',
+      inputSchema: AddJiraCommentSchema,
+    },
+    async ({ issueIdOrKey, comment, attachmentPaths, domain, email, apiToken }) => {
+      try {
+        const result = await addJiraComment(issueIdOrKey, comment, domain, email, apiToken, attachmentPaths);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        return {
+          isError: true,
+          content: [
+            {
+              type: 'text',
+              text: `Jira Tool Error: ${errorMessage}\n\n${JIRA_FALLBACK_INSTRUCTIONS}`,
+            },
+          ],
+        };
+      }
+    },
+  );
+
+  server.registerTool(
+    'add_openproject_work_package_comment',
+    {
+      description:
+        'Add an English-language comment to an OpenProject work package, optionally uploading and attaching multiple screenshots from local file paths. Credentials can be passed as parameters or auto-loaded from OPENPROJECT_DOMAIN and OPENPROJECT_API_KEY env vars.',
+      inputSchema: AddOpenProjectWorkPackageCommentSchema,
+    },
+    async ({ workPackageId, comment, screenshotPaths, domain, apiKey }) => {
+      try {
+        const result = await addOpenProjectWorkPackageComment(
+          workPackageId,
+          comment,
+          domain,
+          apiKey,
+          screenshotPaths,
+        );
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        return {
+          isError: true,
+          content: [
+            {
+              type: 'text',
+              text: `OpenProject Tool Error: ${errorMessage}\n\n${OPENPROJECT_FALLBACK_INSTRUCTIONS}`,
+            },
+          ],
+        };
+      }
+    },
+  );
+
+  server.registerTool(
+    'add_trello_comment',
+    {
+      description:
+        'Add a comment to a Trello card, optionally attaching multiple local files or images. Credentials can be passed as parameters or auto-loaded from TRELLO_API_KEY and TRELLO_API_TOKEN env vars.',
+      inputSchema: AddTrelloCommentSchema,
+    },
+    async ({ cardId, text, attachmentPaths, apiKey, apiToken }) => {
+      try {
+        const result = await addTrelloComment(cardId, text, apiKey, apiToken, attachmentPaths);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        return {
+          isError: true,
+          content: [
+            {
+              type: 'text',
+              text: `Trello Tool Error: ${errorMessage}\n\n${TRELLO_FALLBACK_INSTRUCTIONS}`,
+            },
+          ],
+        };
+      }
+    },
+  );
+
+  server.registerTool(
+    'add_trello_attachment',
+    {
+      description:
+        'Attach a file (e.g. a failure screenshot) to a Trello card. Credentials can be passed as parameters or auto-loaded from TRELLO_API_KEY and TRELLO_API_TOKEN env vars.',
+      inputSchema: AddTrelloAttachmentSchema,
+    },
+    async ({ cardId, filePath, apiKey, apiToken }) => {
+      try {
+        const result = await addTrelloAttachment(cardId, filePath, apiKey, apiToken);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        return {
+          isError: true,
+          content: [
+            {
+              type: 'text',
+              text: `Trello Tool Error: ${errorMessage}\n\n${TRELLO_FALLBACK_INSTRUCTIONS}`,
+            },
+          ],
+        };
+      }
+    },
+  );
+
+  server.registerTool(
+    'add_github_issue_comment',
+    {
+      description:
+        'Add a comment to a GitHub issue. Credentials can be passed as parameters or auto-loaded from GITHUB_TOKEN or GITHUB_PERSONAL_ACCESS_TOKEN env vars.',
+      inputSchema: AddGithubIssueCommentSchema,
+    },
+    async ({ owner, repo, issueNumber, body, githubToken }) => {
+      try {
+        const result = await addGithubIssueComment(owner, repo, issueNumber, body, githubToken);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        return {
+          isError: true,
+          content: [
+            {
+              type: 'text',
+              text: `GitHub Tool Error: ${errorMessage}\n\n${GITHUB_FALLBACK_INSTRUCTIONS}`,
+            },
+          ],
+        };
+      }
+    },
+  );
+
+  // Prompts
   server.registerTool(
     'list_clickup_tasks',
     {
@@ -566,6 +804,7 @@ export function registerProjectManagementController(server: McpServer) {
     },
   );
 
+
   server.registerTool(
     'get_clickup_task',
     {
@@ -598,6 +837,7 @@ export function registerProjectManagementController(server: McpServer) {
       }
     },
   );
+
 
   server.registerTool(
     'get_clickup_task_comments',
@@ -632,6 +872,7 @@ export function registerProjectManagementController(server: McpServer) {
     },
   );
 
+
   server.registerTool(
     'create_clickup_comment',
     {
@@ -665,6 +906,7 @@ export function registerProjectManagementController(server: McpServer) {
     },
   );
 
+
   server.registerTool(
     'update_clickup_comment',
     {
@@ -697,6 +939,7 @@ export function registerProjectManagementController(server: McpServer) {
       }
     },
   );
+
 
   server.registerTool(
     'delete_clickup_comment',
@@ -828,6 +1071,174 @@ export function registerProjectManagementController(server: McpServer) {
         'Markdown (GitHub/OpenProject) / ADF (Jira) / Plain text (Trello) - Please determine from context or use Markdown as default',
       );
 
+      return {
+        messages: [
+          {
+            role: 'user' as const,
+            content: {
+              type: 'text' as const,
+              text: promptText,
+            },
+          },
+        ],
+      };
+    },
+  );
+
+  server.registerPrompt(
+    'pm_summarize_ticket',
+    {
+      title: 'Senior PM Summarize Ticket',
+      description:
+        'Summarize a raw Jira, Trello, OpenProject, or GitHub ticket/issue as a Senior Product Manager.',
+      argsSchema: ProjectManagementPromptSchema,
+    },
+    async ({ command }) => {
+      const promptText = PM_SUMMARIZE_TICKET_PROMPT.replace(
+        '{{context}}',
+        () => command || 'No context provided. Please paste the raw ticket content here.',
+      );
+      return {
+        messages: [
+          {
+            role: 'user' as const,
+            content: {
+              type: 'text' as const,
+              text: promptText,
+            },
+          },
+        ],
+      };
+    },
+  );
+
+  server.registerPrompt(
+    'pm_brainstorm_plan',
+    {
+      title: 'Staff Engineer Brainstorm and Plan',
+      description: 'Brainstorm technical approach and create a plan based on the ticket summary.',
+      argsSchema: ProjectManagementPromptSchema,
+    },
+    async ({ command }) => {
+      const promptText = PM_BRAINSTORM_PLAN_PROMPT.replace(
+        '{{context}}',
+        () => command || 'No context provided.',
+      );
+      return {
+        messages: [
+          {
+            role: 'user' as const,
+            content: {
+              type: 'text' as const,
+              text: promptText,
+            },
+          },
+        ],
+      };
+    },
+  );
+
+  server.registerPrompt(
+    'pm_test_catalog',
+    {
+      title: 'Strict QA Test Catalog Generator',
+      description: 'Generate comprehensive test catalog based on the ticket and technical plan.',
+      argsSchema: ProjectManagementPromptSchema,
+    },
+    async ({ command }) => {
+      const promptText = PM_TEST_CATALOG_PROMPT.replace(
+        '{{context}}',
+        () => command || 'No context provided.',
+      );
+      return {
+        messages: [
+          {
+            role: 'user' as const,
+            content: {
+              type: 'text' as const,
+              text: promptText,
+            },
+          },
+        ],
+      };
+    },
+  );
+
+  server.registerPrompt(
+    'pm_create_ticket',
+    {
+      title: 'Senior PM Create Ticket',
+      description:
+        'Generate a production-grade, structured ticket body based on raw context (feature, bug, findings) adhering to Big Tech standards.',
+      argsSchema: ProjectManagementPromptSchema,
+    },
+    async ({ command }) => {
+      const promptText = PM_CREATE_TICKET_PROMPT.replace(
+        '{{context}}',
+        () => command || 'No context provided.',
+      ).replace(
+        '{{platform}}',
+        'Markdown (GitHub/OpenProject) / ADF (Jira) / Plain text (Trello) - Please determine from context or use Markdown as default',
+      );
+
+      return {
+        messages: [
+          {
+            role: 'user' as const,
+            content: {
+              type: 'text' as const,
+              text: promptText,
+            },
+          },
+        ],
+      };
+    },
+  );
+
+  server.registerPrompt(
+    'pm_testing_ticket',
+    {
+      title: 'Automated Ticket-Driven Web Testing',
+      description:
+        'Fetch a Jira, OpenProject, Trello, or GitHub Issue ticket, derive test steps from its Acceptance Criteria / Test Cases, execute them against a target website using browser tooling, and post a PASS/FAILED result comment back to the ticket.',
+      argsSchema: PmTestingTicketPromptSchema,
+    },
+    async ({ command }) => {
+      const promptText = PM_TESTING_TICKET_PROMPT.replace(
+        '{{context}}',
+        () =>
+          command ||
+          'No context provided. Please specify ticket_url, website_url, and optionally username/password.',
+      );
+      return {
+        messages: [
+          {
+            role: 'user' as const,
+            content: {
+              type: 'text' as const,
+              text: promptText,
+            },
+          },
+        ],
+      };
+    },
+  );
+
+  server.registerPrompt(
+    'dev_check_comment',
+    {
+      title: 'Developer Check Comments and Reviews',
+      description:
+        'Fetch and review comments, activity logs, and review feedback for a ticket/issue (Jira, OpenProject, GitHub, Trello) to extract key decisions and unresolved feedback.',
+      argsSchema: ProjectManagementPromptSchema,
+    },
+    async ({ command }) => {
+      const promptText = PM_DEV_CHECK_COMMENT_PROMPT.replace(
+        '{{context}}',
+        () =>
+          command ||
+          'No ticket ID or context provided. Please specify the ticket/issue key or ID (e.g., PRJ-123 or OpenProject #42 or GitHub owner/repo#issue).',
+      );
       return {
         messages: [
           {

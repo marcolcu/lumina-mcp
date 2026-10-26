@@ -227,3 +227,28 @@ export async function createGithubIssue(
     finalToken,
   );
 }
+
+export async function addGithubIssueComment(
+  owner: string,
+  repo: string,
+  issueNumber: string | number,
+  body: string,
+  githubToken?: string,
+): Promise<unknown> {
+  const finalToken =
+    githubToken || process.env.GITHUB_TOKEN || process.env.GITHUB_PERSONAL_ACCESS_TOKEN;
+
+  if (!owner || !repo || !issueNumber || !body) {
+    throw new Error(
+      'Owner, repo, issueNumber, and body are required to add a GitHub issue comment.',
+    );
+  }
+
+  if (!finalToken) {
+    throw new Error(
+      'GitHub token is required to add a comment. Provide it as an argument or set GITHUB_TOKEN or GITHUB_PERSONAL_ACCESS_TOKEN.',
+    );
+  }
+
+  return await githubRepository.addIssueComment(owner, repo, issueNumber, body, finalToken);
+}

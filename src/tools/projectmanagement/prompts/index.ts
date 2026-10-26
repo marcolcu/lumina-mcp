@@ -29,13 +29,23 @@ Please structure the ticket as follows:
 4. **Summary**: A 2-3 sentence executive summary.
 5. **Problem Statement / User Impact**: What problem does this solve? Who is affected? What is the business impact?
 6. **Acceptance Criteria**: Clear, numbered, testable criteria (use Given/When/Then format if applicable).
-7. **Technical Approach** (optional): Recommended implementation approach or known constraints.
-8. **Out of Scope**: What is explicitly NOT included in this ticket to prevent scope creep.
-9. **Dependencies**: External dependencies, blockers, or related tickets.
-10. **Definition of Done**: A checklist (e.g., code complete, tests passing, docs updated, code reviewed).
-11. **Labels / Tags**: Suggested labels based on the context.
+7. **Test Cases**: Derived directly from the Acceptance Criteria above, a QA-ready checklist a reviewer could copy into a test plan as-is. Skip this section only for **Spike** tickets (investigative, not implementation-ready). For every other Type, walk through the standard QA category checklist below and include only the categories applicable to this ticket's Type and context — but ALWAYS include the baseline categories (happy path, boundary/edge case, invalid/malformed input, empty/null state, permission/auth) even when the raw context is sparse. Format each test case consistently, either as Given/When/Then or as Scenario / Steps / Expected Result:
+   - **Happy path**: the standard, expected flow with valid input.
+   - **Boundary / edge values**: min/max, zero, empty, single-item, very large inputs.
+   - **Invalid / malformed input**: wrong types, unexpected formats, oversized payloads.
+   - **Empty / null state**: missing, null, or undefined data.
+   - **Permission / auth**: authorized vs. unauthorized vs. unauthenticated user.
+   - **Concurrency / race conditions**: where relevant (concurrent writes, duplicate submissions, state races).
+   - **Regression**: adjacent existing functionality that could be impacted.
+   - **Cross-browser / cross-device & accessibility** (UI-facing tickets only): major browsers/viewports, keyboard navigation, screen-reader label presence.
+   - **Error responses / load & timeout behavior** (API/backend-facing tickets only): status codes for each failure mode, timeout/slow-dependency handling, basic load behavior.
+8. **Technical Approach** (optional): Recommended implementation approach or known constraints.
+9. **Out of Scope**: What is explicitly NOT included in this ticket to prevent scope creep.
+10. **Dependencies**: External dependencies, blockers, or related tickets.
+11. **Definition of Done**: A checklist (e.g., code complete, tests passing, docs updated, code reviewed).
+12. **Labels / Tags**: Suggested labels based on the context.
 
-ADAPT YOUR FORMATTING based on the target platform:
+ADAPT YOUR FORMATTING based on the target platform, including the **Test Cases** section:
 - If platform is Jira, use Jira markdown (ADF compatible structure).
 - If platform is GitHub or OpenProject, use standard GitHub Flavored Markdown.
 - If platform is Trello, use plain text with simple markdown.
@@ -163,5 +173,57 @@ failed result
 Please generate the complete test catalog for the current ticket and save both files respectively.
 
 Additional Context:
+{{context}}
+`;
+
+export const PM_DEV_CHECK_COMMENT_PROMPT = `You are a Senior Software Developer reviewing discussions, reviewer comments, and activity logs on a project management ticket or issue.
+
+I will provide you with a ticket key, ID, or raw context for a Jira ticket, OpenProject work package, GitHub issue, or Trello card.
+
+Your goal is to use the available project management tools (\`get_jira_ticket_comments\`, \`get_jira_ticket\`, \`get_openproject_work_package_comments\`, \`get_openproject_work_package\`, \`get_github_issue\`, \`get_trello_card\`) to fetch the ticket's comments and review history, then perform a thorough analysis.
+
+Please structure your output as follows:
+1. **Ticket & Discussion Overview**: Summary of who is participating and the general status of the discussion.
+2. **Key Decisions & Requirements Updates**: Important technical decisions, requirement changes, or clarifications made in the comments.
+3. **Open Questions & Action Items**: Unresolved questions, pending reviews, or action items required before completion.
+4. **Recommended Next Steps**: Clear, prioritized next steps for the developer to act upon.
+
+**Context / Ticket Info:**
+{{context}}
+`;
+
+export const PM_TESTING_TICKET_PROMPT = `You are a Senior QA Engineer running an automated, ticket-driven web test against a live or staging site, using your browser automation tooling (Claude Browser pane, Claude in Chrome, Codex's browser/computer-use tooling, or Antigravity's browser automation surface — whichever this client provides).
+
+I will provide you with a \`ticket_url\`, a \`website_url\`, and optionally a \`username\`/\`password\` for the site under test, in the raw context below.
+
+## Step 1: Detect the ticket platform from \`ticket_url\`
+- Jira: URL contains \`.atlassian.net\` -> use \`get_jira_ticket\` (and \`get_jira_ticket_comments\` if useful).
+- OpenProject: URL contains \`/work_packages/\` -> use \`get_openproject_work_package\`.
+- Trello: URL contains \`trello.com/c/\` -> use \`get_trello_card\`.
+- GitHub Issues: URL matches \`github.com/<owner>/<repo>/issues/<number>\` -> use \`get_github_issue\`.
+- If \`ticket_url\` does not match any of the above, STOP and return a clear error naming the unsupported URL — do not guess or fail silently.
+
+## Step 2: Derive test steps
+From the fetched ticket's Acceptance Criteria (and its **Test Cases** section when present, e.g. tickets generated via \`pm_create_ticket\`), derive concrete, ordered test steps to execute against \`website_url\`. If no explicit test cases exist, derive the standard baseline (happy path, edge case, invalid input, permission/auth) from the Acceptance Criteria and ticket description.
+
+## Step 3: Execute the test in the browser
+1. Open \`website_url\` using this client's browser tooling.
+2. If \`username\`/\`password\` were provided, log in first. If neither was provided, proceed without attempting authentication — do not ask the user for credentials.
+3. Execute each derived step in order, verifying the expected result at each step.
+4. On the first failing step, immediately capture a screenshot before continuing.
+
+## Step 4: Report the result back to the ticket
+Route to the tool matching the detected platform:
+- Jira: \`add_jira_comment\`
+- OpenProject: \`add_openproject_work_package_comment\`
+- Trello: \`add_trello_comment\`
+- GitHub: \`add_github_issue_comment\`
+
+- **If every step passed**: post a comment stating **PASS**, summarizing what was verified (one line per step).
+- **If any step failed**: post a comment stating **FAILED**, naming the exact step that failed and why. Then attach the failure screenshot using the platform's attachment capability where one exists (\`create_jira_ticket\`'s attachment path pattern via a direct attach call, \`add_trello_attachment\` for Trello, or the OpenProject work-package attachment tool). GitHub Issues comments have no first-party file-attachment API available here — for GitHub, describe the failure and the local screenshot path in the comment body instead, and if the client already generated an externally-reachable image URL for the screenshot, embed it as a Markdown image.
+
+Never log or persist the \`username\`/\`password\` beyond this test run — they are used only transiently to authenticate the browser session.
+
+**Context (ticket_url, website_url, and optional username/password):**
 {{context}}
 `;

@@ -99,4 +99,87 @@ describe('JiraRepository', () => {
       ),
     ).rejects.toThrow('Failed to create Jira ticket: Bad Request - Invalid project');
   });
+
+  it('should fetch Jira ticket comments successfully', async () => {
+    const mockResponse = { comments: [{ id: 'c1', body: 'Looks good' }], total: 1 };
+    vi.mocked(global.fetch).mockResolvedValue({
+      ok: true,
+      json: async () => mockResponse,
+    } as Response);
+
+    const result = await repository.getTicketComments(
+      'PRJ-123',
+      'testdomain',
+      'test@test.com',
+      'token123',
+    );
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      'https://testdomain.atlassian.net/rest/api/3/issue/PRJ-123/comment',
+      expect.objectContaining({
+        method: 'GET',
+        headers: {
+          Authorization: `Basic ${Buffer.from('test@test.com:token123').toString('base64')}`,
+          Accept: 'application/json',
+        },
+      }),
+    );
+    expect(result).toEqual(mockResponse);
+  });
+
+  it('should throw an error if fetch ticket comments fails', async () => {
+    vi.mocked(global.fetch).mockResolvedValue({
+      ok: false,
+      statusText: 'Forbidden',
+      text: async () => 'Access denied',
+    } as Response);
+
+    await expect(
+      repository.getTicketComments('PRJ-123', 'testdomain', 'test@test.com', 'token123'),
+    ).rejects.toThrow(
+      'Failed to fetch Jira ticket comments for PRJ-123: Forbidden - Access denied',
+    );
+  });
+
+  it('should add a comment to a Jira ticket successfully', async () => {
+    const mockResponse = { id: 'c99', body: 'PASS: all steps verified' };
+    vi.mocked(global.fetch).mockResolvedValue({
+      ok: true,
+      json: async () => mockResponse,
+    } as Response);
+
+    const result = await repository.addComment(
+      'PRJ-123',
+      'PASS: all steps verified',
+      'testdomain',
+      'test@test.com',
+      'token123',
+    );
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      'https://testdomain.atlassian.net/rest/api/3/issue/PRJ-123/comment',
+      expect.objectContaining({
+        method: 'POST',
+        headers: {
+          Authorization: `Basic ${Buffer.from('test@test.com:token123').toString('base64')}`,
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+        },
+        body: expect.stringContaining('PASS: all steps verified'),
+      }),
+    );
+    expect(result).toEqual(mockResponse);
+  });
+
+  it('should throw an error if adding a comment fails', async () => {
+    vi.mocked(global.fetch).mockResolvedValue({
+      ok: false,
+      statusText: 'Forbidden',
+      text: async () => 'Access denied',
+    } as Response);
+
+    await expect(
+      repository.addComment('PRJ-123', 'FAILED: step 2', 'testdomain', 'test@test.com', 'token123'),
+    ).rejects.toThrow('Failed to add comment to Jira ticket PRJ-123: Forbidden - Access denied');
+  });
 });

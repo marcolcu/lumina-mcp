@@ -80,6 +80,34 @@ export class GithubRepository {
     return (await response.json()) as unknown[];
   }
 
+  async addIssueComment(
+    owner: string,
+    repo: string,
+    issueNumber: string | number,
+    body: string,
+    githubToken?: string,
+  ): Promise<unknown> {
+    const url = `https://api.github.com/repos/${owner}/${repo}/issues/${issueNumber}/comments`;
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        ...this.buildHeaders(githubToken),
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ body }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(
+        `Failed to add comment to GitHub issue ${owner}/${repo}#${issueNumber}: ${response.statusText} - ${errorText}`,
+      );
+    }
+
+    return await response.json();
+  }
+
   async createIssue(
     owner: string,
     repo: string,

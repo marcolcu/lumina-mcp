@@ -373,7 +373,7 @@ describe('Git System MCP Tools and Prompts', () => {
       expect(response.messages[0].content.text).toContain('context or changes description');
     });
 
-    it('should call ai_code_reviewer prompt correctly', async () => {
+    it('should call ai_code_reviewer prompt correctly and include Compound Engineering & Strict Security audit rules', async () => {
       const getHandler = (server.server as unknown as ServerWithHandlers)._requestHandlers.get(
         'prompts/get',
       );
@@ -389,8 +389,16 @@ describe('Git System MCP Tools and Prompts', () => {
         },
       })) as { messages: Array<{ content: { text: string } }> };
 
-      expect(response.messages[0].content.text).toContain('diff to review');
+      const promptText = response.messages[0].content.text;
+      expect(promptText).toContain('diff to review');
+      expect(promptText).toContain('Compound Engineering');
+      expect(promptText).toContain('Strict Security & Defense');
+      expect(promptText).toContain('OWASP');
+      expect(promptText).toContain('Injection Defense');
+      expect(promptText).toContain('Secret Exposure');
+      expect(promptText).toContain('Strict Type Safety');
     });
+
 
     it('should call fix_pr_review_message prompt correctly', async () => {
       const getHandler = (server.server as unknown as ServerWithHandlers)._requestHandlers.get(
