@@ -3,6 +3,8 @@
  *
  *   npx tsx bench/routing.bench.ts                 # mock: exact stage/turn/switch counts on scripted executions (no model calls)
  *   npx tsx bench/routing.bench.ts --real 1,2,3    # real Codex App Server runs (uses your subscription quota), provider-reported tokens
+ *   npx tsx bench/routing.bench.ts --suite          # v2.1 routing scenario suite, mock (deterministic; exit 1 on failed expectations)
+ *   npx tsx bench/routing.bench.ts --suite --real --samples 3 [--only rename,debug]   # explicit opt-in: real Codex runs
  *
  * Every scenario runs on an identical fresh fixture repo for both variants. Results are written to bench/results/.
  */
@@ -122,6 +124,29 @@ function table(runs: Run[], realMode: boolean): string {
 }
 
 const args = process.argv.slice(2);
+if (args.includes('--suite')) {
+  // the v2.1 scenario suite (src/lumina/benchmark.ts): mock by default; --real [--samples N] [--only id,id] is explicit opt-in
+  const suite = await import('../src/lumina/benchmark.js');
+  const cfg = ConfigSchema.parse({});
+  const catalog = loadCatalog();
+  const only = args.includes('--only') ? args[args.indexOf('--only') + 1].split(',') : undefined;
+  const prev = (m: 'mock' | 'real') => [...suite.loadRuns()].reverse().find((r) => r.mode === m);
+  let run;
+  if (args.includes('--real')) {
+    const samples = Number(args.includes('--samples') ? args[args.indexOf('--samples') + 1] : 3);
+    const session = async (dir: string) => {
+      const c = new AppServerClient({ cwd: dir });
+      await c.start();
+      const chat = new Chat(c, { cwd: dir, onDelta: () => undefined, policy: { approvalPolicy: 'never', sandbox: 'workspace-write' } });
+      return { send: (p: string, sel: { model?: string; effort?: string }, isolated: boolean) => chat.send(p, sel, [], { isolated }), context: () => chat.contextTokens(), compact: () => chat.compact(), close: async () => { await c.close(); } };
+    };
+    run = { at: Date.now(), mode: 'real' as const, results: await suite.runReal(cfg, catalog, { session }, { confirmed: true, samples, ids: only, onProgress: (m) => process.stderr.write(`${m}\n`) }) };
+  } else run = { at: Date.now(), mode: 'mock' as const, results: await suite.runMock(cfg, catalog, only) };
+  const before = prev(run.mode);
+  suite.saveRun(run);
+  console.log(suite.formatRun(run, before));
+  process.exit(run.results.some((r) => r.checks.some((c) => !c.ok)) ? 1 : 0);
+}
 const realIdx = args.indexOf('--real');
 const realMode = realIdx >= 0;
 const ids = realMode ? (args[realIdx + 1] ?? '1,2,3,4,5,6').split(',').map(Number) : [];

@@ -44,7 +44,7 @@ export function classifyFailure(tail: string, code = 1): FailureKind {
   return FAILURES.find(([, re]) => re.test(recent))?.[0] ?? 'coding';
 }
 
-const redact = (s: string) => s.replace(/\b(sk-[A-Za-z0-9_-]{8,}|gh[pousr]_[A-Za-z0-9]{8,}|Bearer\s+[A-Za-z0-9._-]{8,})/g, '[redacted]');
+export const redact = (s: string) => s.replace(/\b(sk-[A-Za-z0-9_-]{8,}|gh[pousr]_[A-Za-z0-9]{8,}|Bearer\s+[A-Za-z0-9._-]{8,})/g, '[redacted]');
 const compact = (tail: string) => redact(tail.slice(-500).replace(/\s+/g, ' ').trim());
 
 /** Strictly stronger ladder: same model next effort → hard-tier model at high; deduped. */

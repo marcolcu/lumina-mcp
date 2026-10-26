@@ -10,6 +10,8 @@ const CODE_EXTENSIONS: Record<string, string> = {
   '.rs': 'rust', '.rb': 'ruby', '.php': 'php', '.cs': 'csharp',
 };
 const DOC_EXTENSIONS = new Set(['.md', '.mdx', '.txt', '.rst']);
+// Larger files (minified bundles, dumps) blow up string limits and are not useful search targets.
+const MAX_FILE_BYTES = 1_000_000;
 
 function* walk(root: string, current = root): Generator<string> {
   const entries = fs.readdirSync(current, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name));
@@ -83,7 +85,14 @@ export function buildIndex(repository: string, previous?: RagIndex): RagIndex {
   let changed = previous === undefined;
   for (const filePath of walk(repository)) {
     const relative = path.relative(repository, filePath).replaceAll(path.sep, '/');
-    const source = fs.readFileSync(filePath, 'utf8'); const hash = contentHash(source);
+    const extension = path.extname(filePath).toLowerCase();
+    if (!CODE_EXTENSIONS[extension] && !DOC_EXTENSIONS.has(extension)) continue;
+    let source: string;
+    try {
+      if (fs.statSync(filePath).size > MAX_FILE_BYTES) continue;
+      source = fs.readFileSync(filePath, 'utf8');
+    } catch { continue; }
+    const hash = contentHash(source);
     const old = previous?.files[relative];
     if (old?.contentHash === hash) {
       files[relative] = old;
@@ -94,7 +103,6 @@ export function buildIndex(repository: string, previous?: RagIndex): RagIndex {
       continue;
     }
     changed = true;
-    const extension = path.extname(filePath).toLowerCase();
     const fresh = CODE_EXTENSIONS[extension] ? codeChunks(repository, filePath, CODE_EXTENSIONS[extension], source)
       : DOC_EXTENSIONS.has(extension) ? docChunks(repository, filePath, source) : [];
     files[relative] = { contentHash: hash, chunkIds: fresh.map((chunk) => chunk.id) }; chunks.push(...fresh);

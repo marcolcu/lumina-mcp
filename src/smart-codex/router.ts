@@ -21,7 +21,17 @@ export interface Route {
   require_review: boolean;
   escalation_allowed: boolean;
   reason: string;
+  /** Why this reasoning effort (independent of the model tier). */
+  reasoning_reason: string;
+  /** Set when historical outcomes adjusted this route (what changed, and the evidence). */
+  feedback?: { change: string; evidence: string };
 }
+
+/** Signals for reasoning depth (separate from complexity/risk, which pick the model). */
+const DEPTH = {
+  debug: /\b(debug\w*|root cause|investigat\w*|intermittent\w*|flaky|race conditions?|deadlocks?|memory leaks?|heisenbug|segfault|crash\w*|regression|reproduc\w*|why (does|is|do)|selidiki|investigasi)\b/i,
+  review: /\b(review\w*|audit\w*|assess\w*|analy[sz]\w*|threat model\w*|tinjau\w*|periksa)\b/i,
+};
 
 const LEX = {
   sensitive: /\b(payments?|billing|checkout|stripe|paypal|refunds?|invoices?|ledger|financial|transactions?|auth|authentication|authorization|authori[sz]e|login|passwords?|credentials?|jwt|oauth|sso|rbac|permissions?|security|vulnerabilit\w*|cve|xss|csrf|sql injection|secrets?|encrypt\w*|migrations?|drop table|production data|data integrity|pii|(?:refresh|access|api|auth|bearer|csrf) tokens?)\b/gi,
@@ -203,7 +213,21 @@ export function route(input: RouteInput, cfg: RouterConfig, catalog: ModelInfo[]
   const risk = tier === 'critical' ? 'high' : tier === 'hard' || sensitive ? 'medium' : 'low';
   const simpleCritical = tier === 'critical' && !prefs.tier && git !== 'dangerous' && trivialOp && !logic && h.hard === 0;
   const wantModel = prefs.model ?? cfg.models[tier];
-  const wantEffort = prefs.reasoning ?? (simpleCritical ? cfg.reasoning.critical_simple : cfg.reasoning[tier]);
+  // reasoning: the depth the work needs, chosen apart from the model. Security words alone never force "high":
+  // documenting security is light, reviewing it is analysis, implementing it needs the most care.
+  const secDomain = h.sensitive > 0 && git !== 'simple';
+  const modifies = LEX.modify.test(task) || (h.normal > 0 && !LEX.readOnly.test(task));
+  const wide = h.scope > 0 || h.hard > 0;
+  let depth: { level: 'fast' | 'normal' | 'hard' | 'critical' | 'critical_simple'; why: string };
+  if (tier === 'fast') depth = { level: 'fast', why: secDomain ? 'security documentation/cosmetic change: no logic is touched' : 'trivial edit' };
+  else if (secDomain && trivialOp && LEX.safeObject.test(task)) depth = { level: 'fast', why: 'security documentation/cosmetic change: no logic is touched' };
+  else if (secDomain && (DEPTH.review.test(task) || LEX.readOnly.test(task)) && !LEX.modify.test(task)) depth = wide ? { level: 'hard', why: 'security review across a wide scope' } : { level: 'normal', why: 'security review (analysis, no implementation)' };
+  else if (tier === 'critical') depth = simpleCritical ? { level: 'critical_simple', why: 'small change inside security-sensitive code' } : { level: 'critical', why: 'security-sensitive implementation' };
+  else if (DEPTH.debug.test(task) && (wide || words > 40)) depth = { level: 'hard', why: 'complex debugging (root cause across several factors)' };
+  else if (tier === 'hard') depth = { level: 'hard', why: 'multi-factor complexity' };
+  else if (DEPTH.debug.test(task)) depth = { level: 'normal', why: 'focused debugging' };
+  else depth = { level: 'normal', why: confidence < 0.5 ? 'ambiguous request: moderate reasoning, not minimal' : modifies ? 'standard implementation' : 'standard question' };
+  const wantEffort = prefs.reasoning ?? cfg.reasoning[depth.level];
   const resolved = resolveModel(catalog, wantModel, wantEffort, Boolean(prefs.model || prefs.reasoning));
   if (resolved.note) reasons.push(resolved.note);
   if (prefs.reasoning === 'low' && (tier === 'critical' || tier === 'hard')) {
@@ -219,6 +243,7 @@ export function route(input: RouteInput, cfg: RouterConfig, catalog: ModelInfo[]
     relevant_files: files, require_review: requireReview,
     escalation_allowed: cfg.escalation.enabled && !DESTRUCTIVE.test(full),
     reason: reasons.join('; '),
+    reasoning_reason: prefs.reasoning ? `explicitly requested (${prefs.reasoning})` : `${depth.why}${resolved.effort !== wantEffort ? `; "${wantEffort}" is not available for ${resolved.model}, using ${resolved.effort}` : ''}`,
   };
 }
 

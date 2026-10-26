@@ -1,13 +1,13 @@
 import type { AppClient } from './chat.js';
 import type { Key } from './keys.js';
 
-export interface SkillInfo { name: string; description: string; scope: string; path: string; }
+export interface SkillInfo { name: string; description: string; scope: string; path: string; /** Tools the skill declares it needs (SKILL.json dependencies). */ tools?: { type: string; value: string }[] }
 type SkillsClient = Pick<AppClient, 'request' | 'onNotification'>;
 
 const SCOPE_ORDER: Record<string, number> = { repo: 0, user: 1, admin: 2, system: 3 };
 export const scopeLabel = (s: string): string => ({ repo: 'project', user: 'global', system: 'system', admin: 'admin' } as Record<string, string>)[s] ?? s;
 
-interface RawSkill { name: string; description?: string; shortDescription?: string; interface?: { shortDescription?: string }; path: string; scope: string; enabled: boolean; }
+interface RawSkill { name: string; description?: string; shortDescription?: string; interface?: { shortDescription?: string }; dependencies?: { tools?: { type: string; value: string }[] } | null; path: string; scope: string; enabled: boolean; }
 
 /**
  * Lightweight skill metadata from Codex's own `skills/list` (global, project-local `.agents/skills`, system).
@@ -37,7 +37,7 @@ export class SkillCatalog {
     const seen = new Set<string>();
     this.cache = raw
       .filter((s) => s.enabled && !seen.has(s.name) && seen.add(s.name))
-      .map((s) => ({ name: s.name, scope: s.scope, path: s.path, description: (s.interface?.shortDescription ?? s.shortDescription ?? s.description ?? '').replace(/\s+/g, ' ').trim() }))
+      .map((s) => ({ name: s.name, scope: s.scope, path: s.path, description: (s.interface?.shortDescription ?? s.shortDescription ?? s.description ?? '').replace(/\s+/g, ' ').trim(), ...(s.dependencies?.tools?.length ? { tools: s.dependencies.tools.map((t) => ({ type: t.type, value: t.value })) } : {}) }))
       .sort((a, b) => (SCOPE_ORDER[a.scope] ?? 9) - (SCOPE_ORDER[b.scope] ?? 9) || a.name.localeCompare(b.name));
     this.stale = false;
     return this.cache;

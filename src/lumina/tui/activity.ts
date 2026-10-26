@@ -1,18 +1,23 @@
+import path from 'node:path';
+import { unwrap } from '../approval/policy.js';
+import { TEST_CMD } from '../stages.js';
 import { Screen } from './screen.js';
 
 const FRAMES = ['◐', '◓', '◑', '◒'];
+/** States where the model itself is working: the status shows which model and effort. */
+const MODEL_SIDE = new Set(['Thinking...', 'Reasoning...', 'Planning...', 'Finalizing...']);
 const MAX_COMMITTED = 12; // non-failure timeline lines per turn; the rest are folded away
 
-type Kind = 'read' | 'search' | 'command' | 'edit' | 'tool' | 'web';
+type Kind = 'read' | 'search' | 'command' | 'test' | 'edit' | 'tool' | 'web';
 const LABEL: Record<Kind, string> = {
-  read: 'Reading files...', search: 'Searching files...', command: 'Running command...',
+  read: 'Reading files...', search: 'Searching files...', command: 'Running command...', test: 'Running tests...',
   edit: 'Editing files...', tool: 'Calling tool...', web: 'Searching the web...',
 };
 export type EndStatus = 'completed' | 'failed' | 'cancelled';
 
 interface Item {
   type: string; id?: string; status?: string; exitCode?: number | null;
-  commandActions?: { type: string }[]; changes?: unknown[];
+  commandActions?: { type: string }[]; changes?: { path?: string }[]; command?: string; server?: string; tool?: string;
 }
 
 export interface ActivityOptions {
@@ -20,6 +25,8 @@ export interface ActivityOptions {
   animate: boolean;
   color: boolean;
   intervalMs?: number;
+  /** Edited paths are shown relative to this directory. */
+  cwd?: string;
 }
 
 /**
@@ -31,6 +38,9 @@ export class Activity {
   private active = false;
   private paused = false;
   private label = '';
+  private detail?: string; // second status row: the command, file or model behind the label
+  /** Shown under model-side states (Thinking/Reasoning): e.g. "Model: GPT-6 Luna · Reasoning: Medium". */
+  model?: string;
   private frame = 0;
   private timer?: NodeJS.Timeout;
   private seenStarted = new Set<string>();
@@ -60,11 +70,15 @@ export class Activity {
 
   private draw(): void {
     if (!this.screen.live) return;
-    if (!this.active || this.paused) return this.screen.setStatus(undefined);
+    if (!this.active) return this.screen.setStatus(undefined);
     const width = Math.max(10, this.screen.columns - 1) - 2;
-    let line = `${FRAMES[this.frame]} ${this.context}${this.label} (${this.elapsed()})`;
-    if (line.length > width) line = `${line.slice(0, width - 1)}…`;
-    this.screen.setStatus(`  ${this.paint('36', line[0])}${line.slice(1)}`);
+    const fit = (s: string, w = width) => (s.length > w ? `${s.slice(0, w - 1)}…` : s);
+    // approval: a static row (no animation) while the prompt above waits for an answer
+    if (this.paused) return this.screen.setStatus(`  ${this.paint('33', '!')} ${fit(`Waiting for approval · ${this.elapsed()}`, width - 2)}`);
+    const glyph = this.opts.animate ? FRAMES[this.frame] : '●';
+    const line = fit(`${glyph} ${this.context}${this.label} ${this.elapsed()}`);
+    const detail = this.detail ?? (MODEL_SIDE.has(this.label) ? this.model : undefined);
+    this.screen.setStatus([`  ${this.paint('36', line[0])}${line.slice(1)}`, ...(detail ? [`    ${this.dim(fit(detail, width - 2))}`] : [])]);
   }
 
   /** Streamed assistant text. */
@@ -104,30 +118,47 @@ export class Activity {
     this.t0 = this.now();
     this.active = true; this.paused = false; this.running = 0; this.group = undefined;
     this.seenStarted.clear(); this.seenDone.clear(); this.committed = 0; this.hidden = 0;
-    this.label = label; this.frame = 0;
+    this.label = label; this.detail = undefined; this.frame = 0;
     this.screen.write(`${this.accent('◆')} Lumina\n`);
     this.screen.prefix = '  ';
     this.last = 'none';
     this.draw();
-    if (this.opts.animate && this.screen.live) {
-      this.timer = setInterval(() => { this.frame = (this.frame + 1) % FRAMES.length; this.draw(); }, this.opts.intervalMs ?? 100);
-      this.timer.unref();
-    }
+    this.startTimer();
   }
 
-  setLabel(label: string): void {
-    if (!this.active || label === this.label) return;
+  /** Animated: spinner frames. Reduced motion / no animation: a static glyph, redrawn once a second for the clock. */
+  private startTimer(): void {
+    if (!this.screen.live || this.timer) return;
+    const tick = this.opts.animate ? () => { this.frame = (this.frame + 1) % FRAMES.length; this.draw(); } : () => this.draw();
+    this.timer = setInterval(tick, this.opts.animate ? this.opts.intervalMs ?? 100 : 1000);
+    this.timer.unref();
+  }
+
+  setLabel(label: string, detail?: string): void {
+    if (!this.active || (label === this.label && detail === this.detail)) return;
     this.label = label;
+    this.detail = detail;
     this.draw();
   }
 
-  /** Hides the status row (approval prompt). The timer keeps counting but draws nothing. */
-  pause(): void { this.paused = true; this.draw(); }
+  /** A status row without a conversation block (e.g. verification after the turn ended). */
+  spin(label: string, detail?: string): void {
+    this.stopTimer();
+    this.t0 = this.now();
+    this.active = true; this.paused = false; this.label = label; this.detail = detail; this.frame = 0;
+    this.draw();
+    this.startTimer();
+  }
+  stopSpin(): void { if (!this.active) return; this.stopTimer(); this.active = false; this.draw(); }
+
+  /** Approval required: the animation stops at once; the row says what the turn is waiting for. */
+  pause(): void { this.paused = true; this.stopTimer(); this.draw(); }
 
   resume(): void {
     if (!this.paused) return;
     this.paused = false;
     this.draw();
+    if (this.active) this.startTimer();
   }
 
   /** Terminal resized: the status row is re-fitted. */
@@ -135,9 +166,10 @@ export class Activity {
 
   end(status: EndStatus, detail?: string): void {
     if (!this.active) return; // completion feedback exactly once
+    this.stopTimer();
     this.flushGroup();
     this.active = false;
-    this.stopTimer();
+    this.paused = false;
     this.draw();
     if (!this.screen.atLineStart) this.screen.write('\n');
     if (this.last !== 'none') this.screen.write('\n'); // completion stands apart from the answer
@@ -170,7 +202,7 @@ export class Activity {
   event(method: string, params: unknown): void {
     if (!this.active) return;
     const item = (params as { item?: Item } | undefined)?.item;
-    if (method === 'turn/started') return this.setLabel('Thinking...');
+    if (method === 'turn/started') return this.setLabel(this.running ? this.label : 'Thinking...', this.running ? this.detail : undefined);
     if (!item) return;
     if (method === 'item/started') return this.onStarted(item);
     if (method === 'item/completed') return this.onCompleted(item);
@@ -182,7 +214,7 @@ export class Activity {
         const a = item.commandActions ?? [];
         if (a.length && a.every((x) => x.type === 'read')) return 'read';
         if (a.length && a.every((x) => x.type === 'search' || x.type === 'listFiles')) return 'search';
-        return 'command';
+        return item.command && TEST_CMD.test(unwrap(item.command)) ? 'test' : 'command';
       }
       case 'fileChange': return 'edit';
       case 'mcpToolCall': case 'dynamicToolCall': return 'tool';
@@ -200,11 +232,23 @@ export class Activity {
       if (this.group && this.group.kind !== kind) this.flushGroup();
       this.group ??= { kind, n: 0 };
       this.running++;
-      return this.setLabel(LABEL[kind]);
+      return this.setLabel(LABEL[kind], this.detailOf(kind, item));
     }
     if (item.type === 'reasoning') { this.flushGroup(); this.setLabel('Reasoning...'); }
     else if (item.type === 'plan') this.setLabel('Planning...');
     else if (item.type === 'contextCompaction') this.setLabel('Compacting context...');
+  }
+
+  /** What the running step works on, straight from the event: the command, the edited files, the tool. */
+  private detailOf(kind: Kind, item: Item): string | undefined {
+    if (item.type === 'commandExecution') return item.command ? unwrap(item.command).replace(/\s+/g, ' ').trim() : undefined;
+    if (kind === 'edit') {
+      const files = (item.changes ?? []).map((c) => c.path).filter((p): p is string => Boolean(p))
+        .map((p) => (this.opts.cwd && path.isAbsolute(p) && !path.relative(this.opts.cwd, p).startsWith('..') ? path.relative(this.opts.cwd, p) : p));
+      return files.length ? `${files[0]}${files.length > 1 ? ` (+${files.length - 1} more)` : ''}` : undefined;
+    }
+    if (kind === 'tool' && item.tool) return item.server ? `${item.server} › ${item.tool}` : item.tool;
+    return undefined;
   }
 
   private onCompleted(item: Item): void {
@@ -217,7 +261,7 @@ export class Activity {
       const failed = item.status === 'failed' || item.status === 'declined' || (typeof item.exitCode === 'number' && item.exitCode !== 0);
       if (failed) {
         this.flushGroup();
-        const what = kind === 'edit' ? 'Edit' : kind === 'tool' ? 'Tool call' : kind === 'web' ? 'Search' : 'Command';
+        const what = kind === 'edit' ? 'Edit' : kind === 'tool' ? 'Tool call' : kind === 'web' ? 'Search' : kind === 'test' ? 'Tests' : 'Command';
         const declined = item.status === 'declined';
         this.commit(declined ? `${this.paint('33', '!')} ${what} declined` : `${this.paint('31', '✗')} ${what} failed${typeof item.exitCode === 'number' ? ` (exit ${item.exitCode})` : ''}`);
       } else if (this.group) {
@@ -234,7 +278,7 @@ export class Activity {
     this.group = undefined;
     if (!g || g.n === 0) return;
     const s = g.n === 1 ? '' : 's';
-    const text = { read: `Read ${g.n} file${s}`, search: `Searched ${g.n} time${s}`, command: `Ran ${g.n} command${s}`, edit: `Edited ${g.n} file${s}`, tool: `Used ${g.n} tool call${s}`, web: 'Searched the web' }[g.kind];
+    const text = { read: `Read ${g.n} file${s}`, search: `Searched ${g.n} time${s}`, command: `Ran ${g.n} command${s}`, test: `Ran tests${g.n > 1 ? ` (${g.n} runs)` : ''}`, edit: `Edited ${g.n} file${s}`, tool: `Used ${g.n} tool call${s}`, web: 'Searched the web' }[g.kind];
     if (this.committed >= MAX_COMMITTED) { this.hidden++; return; }
     this.committed++;
     this.commit(`${this.paint('32', '✓')} ${text}`);

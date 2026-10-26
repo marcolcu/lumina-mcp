@@ -1,6 +1,6 @@
 export type KeyName =
   | 'submit' | 'newline' | 'left' | 'right' | 'up' | 'down' | 'home' | 'end' | 'backspace' | 'delete'
-  | 'interrupt' | 'eof' | 'escape' | 'tab' | 'paste-image' | 'kill-line-start' | 'kill-line-end' | 'kill-word' | 'word-left' | 'word-right';
+  | 'interrupt' | 'eof' | 'escape' | 'tab' | 'paste-image' | 'page-up' | 'page-down' | 'kill-line-start' | 'kill-line-end' | 'kill-word' | 'word-left' | 'word-right';
 export type Key = { t: 'text'; s: string } | { t: 'paste'; s: string } | { t: 'key'; name: KeyName };
 
 const PASTE_START = '\x1b[200~';
@@ -128,7 +128,7 @@ export class KeyParser {
       case 'u': return fromCode(Number(p[0]), mods);
       case '~':
         if (p[0] === '27') return fromCode(Number(p[2]), mods); // xterm modifyOtherKeys
-        return ({ 1: 'home', 7: 'home', 4: 'end', 8: 'end', 3: 'delete' } as Record<string, KeyName>)[p[0]] ? key(({ 1: 'home', 7: 'home', 4: 'end', 8: 'end', 3: 'delete' } as Record<string, KeyName>)[p[0]]) : undefined;
+        { const k = ({ 1: 'home', 7: 'home', 4: 'end', 8: 'end', 3: 'delete', 5: 'page-up', 6: 'page-down' } as Record<string, KeyName>)[p[0]]; return k ? key(k) : undefined; }
       default: return undefined;
     }
   }

@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -6,6 +7,8 @@ import path from 'node:path';
 import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
 import { describe, expect, it, vi } from 'vitest';
+
+vi.setConfig({ testTimeout: 30000 }); // real timers and child processes: generous under parallel load
 import { AppClient, Chat } from '../../src/lumina/tui/chat.js';
 import { ConfigSchema } from '../../src/smart-codex/config.js';
 import { TurnRouter } from '../../src/lumina/tui/routing.js';
@@ -39,7 +42,8 @@ class FakeClient implements AppClient {
     }
     if (method === 'account/usage/read') return { summary: { lifetimeTokens: 8993742490, peakDailyTokens: 328538694, currentStreakDays: 32 }, dailyUsageBuckets: [{ startDate: new Date().toISOString().slice(0, 10), tokens: 1500000 }, { startDate: '2020-01-01', tokens: 9 }] };
     if (method === 'skills/list') return { data: [{ cwd: params.cwds?.[0], skills: this.skills, errors: [] }] };
-    if (method === 'thread/list') return { data: [{ id: 'abcdef12-0000', preview: 'earlier chat' }, { id: 'zzzz9999-0000', preview: 'older' }] };
+    if (method === 'thread/list') return this.listPage ? this.listPage(params) : { data: [{ id: 'abcdef12-0000', preview: 'earlier chat' }, { id: 'zzzz9999-0000', preview: 'older' }] };
+    if (method === 'thread/resume' && this.missing.includes(params.threadId)) throw new Error(`thread not found: ${params.threadId}`);
     if (method === 'thread/resume') return { thread: { id: params.threadId }, model: 'gpt-6-sol' };
     if (method === 'thread/start') return params.ephemeral ? { thread: { id: `iso-${++this.iso}` }, model: 'gpt-6-luna' } : { thread: { id: 't1' }, model: 'gpt-6-luna', sandbox: { type: 'workspaceWrite', writableRoots: [], networkAccess: false, excludeTmpdirEnvVar: false, excludeSlashTmp: false } };
     if (method === 'thread/compact/start') { setTimeout(() => this.emit('thread/compacted', { threadId: params.threadId, turnId: 'c' }), 5); return {}; }
@@ -68,6 +72,8 @@ class FakeClient implements AppClient {
     { name: 'disabled-one', description: 'off', path: '/x', scope: 'user', enabled: false },
   ];
   usageFail = false;
+  listPage?: (params: Record<string, any>) => unknown;
+  missing: string[] = [];
   iso = 0;
   readFail = false;
   history: unknown[] = [
@@ -126,15 +132,15 @@ describe('TUI', () => {
     const done = runTui(client, '/w', { input, output }, { router, resume });
     return { input, output, done, text: () => text };
   };
-  const wait = (ms = 60) => new Promise((r) => setTimeout(r, ms));
+  const wait = (ms = 150) => new Promise((r) => setTimeout(r, ms));
 
   it('multi-turn conversation with streamed output, then exit', async () => {
     const c = new FakeClient();
     const t = setup(c);
     t.input.write('hello\n');
-    await wait();
+    for (let i = 0; i < 250 && !t.text().includes('Completed in'); i++) await wait(20);
     t.input.write('world\n');
-    await wait();
+    for (let i = 0; i < 250 && (t.text().match(/Completed in/g) ?? []).length < 2; i++) await wait(20);
     expect(t.text()).toContain('echo:hello');
     expect(t.text()).toContain('echo:world');
     expect(t.text()).not.toContain('LEAK');
@@ -182,14 +188,16 @@ describe('Phase 3: routing, slash commands, resume', () => {
     const done = runTui(client, '/w', { input, output }, { router, resume });
     return { input, done, text: () => text, router };
   };
-  const wait = (ms = 60) => new Promise((r) => setTimeout(r, ms));
+  const wait = (ms = 150) => new Promise((r) => setTimeout(r, ms));
+  /** Waits until `n` requests have finished (non-TTY prints one completion line per request). */
+  const settled = async (t: { text(): string }, n: number) => { const t0 = Date.now(); while ((t.text().match(/Completed in/g) ?? []).length < n && Date.now() - t0 < 5000) await wait(20); await wait(30); };
   const turnParams = (c: FakeClient) => c.requests.filter((r) => r.method === 'turn/start').map((r) => r.params);
 
   it('routes each turn independently on one thread (context preserved) and shows the selection', async () => {
     const c = new FakeClient();
     const t = setup(c);
-    t.input.write('update the button text\n'); await wait();
-    t.input.write('Fix payment webhook signature verification\n'); await wait();
+    t.input.write('update the button text\n'); await settled(t, 1);
+    t.input.write('Fix payment webhook signature verification\n'); await settled(t, 2);
     const [a, b] = turnParams(c);
     expect([a.model, a.effort, a.threadId]).toEqual(['gpt-6-luna', 'low', 't1']);
     expect([b.model, b.effort, b.threadId]).toEqual(['gpt-6-sol', 'high', 't1']);
@@ -201,12 +209,12 @@ describe('Phase 3: routing, slash commands, resume', () => {
   it('vague follow-ups keep the previous selection; /model and /reasoning override and validate', async () => {
     const c = new FakeClient();
     const t = setup(c);
-    t.input.write('Fix payment webhook signature verification\n'); await wait();
-    t.input.write('ok do it\n'); await wait();
+    t.input.write('Fix payment webhook signature verification\n'); await settled(t, 1);
+    t.input.write('ok do it\n'); await settled(t, 2);
     expect(turnParams(c)[1]).toMatchObject({ model: 'gpt-6-sol', effort: 'high' });
     t.input.write('/model gpt-6-luna\n'); await wait();
     t.input.write('/reasoning low\n'); await wait();
-    t.input.write('Refactor authentication middleware\n'); await wait();
+    t.input.write('Refactor authentication middleware\n'); await settled(t, 3);
     expect(turnParams(c)[2]).toMatchObject({ model: 'gpt-6-luna', effort: 'low' });
     t.input.write('/model nope\n'); await wait();
     expect(t.text()).toMatch(/Unsupported model/);
@@ -221,14 +229,14 @@ describe('Phase 3: routing, slash commands, resume', () => {
   it('/new starts a fresh thread; /resume lists, resumes by number, and sends on the resumed thread', async () => {
     const c = new FakeClient();
     const t = setup(c);
-    t.input.write('hello\n'); await wait();
+    t.input.write('hello\n'); await settled(t, 1);
     t.input.write('/new\n'); await wait();
-    t.input.write('hello again\n'); await wait();
+    t.input.write('hello again\n'); await settled(t, 2);
     expect(c.requests.filter((r) => r.method === 'thread/start')).toHaveLength(2);
     t.input.write('/resume\n'); await wait();
     expect(t.text()).toContain('1. earlier chat');
     t.input.write('/resume 2\n'); await wait();
-    t.input.write('continue the work\n'); await wait();
+    t.input.write('continue the work\n'); await settled(t, 3);
     expect(c.requests.find((r) => r.method === 'thread/resume')?.params).toMatchObject({ threadId: 'zzzz9999-0000', approvalPolicy: 'on-request', sandbox: 'workspace-write' });
     expect(turnParams(c).at(-1)).toMatchObject({ threadId: 'zzzz9999-0000' });
     t.input.write('/resume 9\n'); await wait();
@@ -254,7 +262,9 @@ describe('Phase 4: approvals, cancellation, recovery, CLI', () => {
     const done = runTui(client, '/w', { input, output }, { router, ...extra });
     return { input, done, text: () => text };
   };
-  const wait = (ms = 60) => new Promise((r) => setTimeout(r, ms));
+  const wait = (ms = 150) => new Promise((r) => setTimeout(r, ms));
+  /** Polls instead of sleeping: robust when the machine is busy. */
+  const until = async (f: () => boolean, ms = 5000) => { const t0 = Date.now(); while (!f() && Date.now() - t0 < ms) await wait(20); };
   const approvalTurn = (c: FakeClient, decisions: unknown[], request = { command: 'rm -rf build', cwd: '/w' }) => {
     c.onTurn = async (threadId) => {
       decisions.push(await c.serverHandler!('item/commandExecution/requestApproval', { threadId, ...request }));
@@ -267,13 +277,13 @@ describe('Phase 4: approvals, cancellation, recovery, CLI', () => {
     const decisions: unknown[] = [];
     approvalTurn(c, decisions);
     const t = setup(c);
-    t.input.write('delete the build dir\n'); await wait();
+    t.input.write('delete the build dir\n'); await until(() => t.text().includes('[y] Approve'));
     expect(t.text()).toContain('Approval Required');
     expect(t.text()).toContain('rm -rf build');
     expect(t.text()).toContain('[y] Approve');
     t.input.write('maybe\n'); await wait(20); // invalid answer re-asks, does not decide
     expect(decisions).toHaveLength(0);
-    t.input.write(`${answer}\n`); await wait();
+    t.input.write(`${answer}\n`); await until(() => decisions.length > 0);
     expect(decisions).toEqual([{ decision }]);
     t.input.write('/exit\n'); expect(await t.done).toBe(0);
   });
@@ -299,9 +309,9 @@ describe('Phase 4: approvals, cancellation, recovery, CLI', () => {
     const decisions: unknown[] = [];
     c.onTurn = async (threadId) => { decisions.push(await c.serverHandler!('item/commandExecution/requestApproval', { threadId, command: 'sleep 99' })); };
     const t = setup(c, {}, true);
-    t.input.write('run it\r'); await wait();
+    t.input.write('run it\r'); await until(() => t.text().includes('Approval Required'));
     expect(t.text()).toContain('Approval Required');
-    t.input.write('\x03'); await wait();
+    t.input.write('\x03'); await until(() => t.text().includes('Cancelled after'));
     expect(c.interrupted).toEqual([{ threadId: 't1', turnId: 'u1' }]);
     expect(decisions).toEqual([{ decision: 'cancel' }]);
     expect(t.text().replace(/\x1b\[[0-9;]*[A-Za-z]/g, '')).toContain('! Cancelled after');
@@ -431,9 +441,9 @@ describe('Phase 4: approvals, cancellation, recovery, CLI', () => {
       c.emit('turn/completed', { threadId, turn: { status: 'completed', error: null } });
     };
     const t = setup(c, {}, true);
-    t.input.write('go\r'); t.input.write('my draft'); await wait(80);
+    t.input.write('go\r'); t.input.write('my draft'); await until(() => plain(t.text()).includes('Approval Required'));
     expect(plain(t.text())).toContain('Approval Required');
-    t.input.write('y\r'); await wait(80);
+    t.input.write('y\r'); await until(() => decisions.length > 0 && plain(t.text()).includes('Completed in')); await wait(50);
     expect(decisions).toEqual([{ decision: 'accept' }]);
     expect(plain(t.text()).split('Completed in').pop()).toContain('› my draft');
     t.input.write('\x04'); await wait(); t.input.write('\x15'); t.input.write('\x04'); await t.done;
@@ -545,7 +555,7 @@ describe('Phase 5: layout, welcome, status bar', () => {
     const done = runTui(client, '/w', { input, output }, { router, version: '9.9.9', ...extra });
     return { input, output, done, text: () => text, screen: () => emulate(text), cols: (n: number) => { (output as unknown as { columns: number }).columns = n; output.emit('resize'); } };
   };
-  const wait = (ms = 40) => new Promise((r) => setTimeout(r, ms));
+  const wait = (ms = 150) => new Promise((r) => setTimeout(r, ms));
   const RULE = (n: number) => '─'.repeat(n - 1);
   const quit = async (t: ReturnType<typeof setup>) => { t.input.write('\x04'); await t.done; };
 
@@ -610,13 +620,43 @@ describe('Phase 5: layout, welcome, status bar', () => {
     let rows = t.screen();
     expect(rows).toContain('› Create authentication module');
     expect(rows).toContain('◆ Lumina');
-    expect(rows.find((r) => /^ {2}[◐◓◑◒] Reading files\.\.\. \(\ds\)$/.test(r))).toBeTruthy();
+    expect(rows.find((r) => /^ {2}[◐◓◑◒] Reading files\.\.\. \ds$/.test(r))).toBeTruthy();
     expect(rows.slice(-4, -2)).toEqual([RULE(60), '› Ask Lumina anything...']); // composer still anchored during the turn
     release(); await wait(80);
     rows = t.screen();
     const i = rows.indexOf('◆ Lumina');
     expect(rows.slice(i, i + 7)).toEqual(['◆ Lumina', '  ✓ Read 1 file', '', '  Authentication module implemented.', '', expect.stringMatching(/^ {2}✓ Completed in \ds$/), '']);
     expect(rows.join('\n')).not.toMatch(/[◐◓◑◒] Reading/);
+    await quit(t);
+  });
+  it('immediate feedback: Preparing while skills load, then Thinking with the routed model, then the running test command', async () => {
+    const c = new FakeClient();
+    let skillsReady!: () => void;
+    const gate = new Promise<void>((r) => { skillsReady = r; });
+    const orig = c.request;
+    c.request = (async (m: string, p: Record<string, any>) => { if (m === 'skills/list') await gate; return orig(m, p); }) as AppClient['request'];
+    let release!: () => void;
+    c.onTurn = async (threadId) => {
+      c.emit('turn/started', { threadId, turn: { id: 'u1' } });
+      c.emit('item/started', { threadId, item: { type: 'reasoning', id: 'r' } });
+      await new Promise<void>((r) => { release = r; });
+      c.emit('item/completed', { threadId, item: { type: 'reasoning', id: 'r' } });
+      c.emit('item/started', { threadId, item: { type: 'commandExecution', id: 'c', command: "/bin/zsh -lc 'npm test'", commandActions: [{ type: 'unknown' }] } });
+      await new Promise<void>((r) => { release = r; });
+      c.emit('item/completed', { threadId, item: { type: 'commandExecution', id: 'c', command: 'npm test', status: 'completed', exitCode: 0, commandActions: [{ type: 'unknown' }] } });
+      c.emit('turn/completed', { threadId, turn: { status: 'completed', error: null } });
+    };
+    const t = setup(c);
+    t.input.write('use $caveman to fix it\r'); await wait(30);
+    expect(t.screen().join('\n')).toMatch(/[◐◓◑◒] Preparing\.\.\. 0s/);
+    skillsReady(); await wait(80);
+    expect(t.screen().join('\n')).toMatch(/[◐◓◑◒] Reasoning\.\.\. \ds\n {4}Model: GPT-6 Luna · Reasoning: \w+/);
+    release(); await wait(40);
+    expect(t.screen().join('\n')).toMatch(/[◐◓◑◒] Running tests\.\.\. \ds\n {4}npm test/);
+    release(); await wait(80);
+    const all = t.screen().join('\n');
+    expect(all).toContain('✓ Ran tests');
+    expect(all).not.toMatch(/[◐◓◑◒●]|Model: GPT|Preparing/); // every status row is gone after completion
     await quit(t);
   });
   it('streaming keeps the composer (and a draft typed meanwhile) at the bottom; text never overwrites it', async () => {
@@ -731,7 +771,7 @@ describe('Phase 6: Skills', () => {
     const done = runTui(client, '/w', { input, output }, { router });
     return { input, done, text: () => text, screen: () => emulate(text) };
   };
-  const wait = (ms = 50) => new Promise((r) => setTimeout(r, ms));
+  const wait = (ms = 150) => new Promise((r) => setTimeout(r, ms));
   const turns = (c: FakeClient) => c.requests.filter((r) => r.method === 'turn/start').map((r) => r.params.input as { type: string; text?: string; name?: string; path?: string }[]);
   const quit = async (t: ReturnType<typeof setup>) => { t.input.write('\x03'); t.input.write('\x04'); await t.done; };
 
@@ -845,7 +885,7 @@ describe('MCP tool approvals', () => {
     output.on('data', (d) => { text += d.toString(); });
     return { input, done: runTui(client, '/w', { input, output }, { router }), text: () => text };
   };
-  const wait = (ms = 60) => new Promise((r) => setTimeout(r, ms));
+  const wait = (ms = 150) => new Promise((r) => setTimeout(r, ms));
   const elicit = (c: FakeClient, threadId: string, extra: Record<string, unknown> = {}) => c.serverHandler!('mcpServer/elicitation/request', {
     threadId, serverName: 'lumina-mcp', mode: 'form', requestedSchema: { type: 'object', properties: {} },
     message: 'Allow the lumina-mcp MCP server to run tool "get_my_openproject_work_packages"?',
@@ -897,7 +937,7 @@ describe('MCP tool approvals', () => {
     expect((await run('auto', 'get_jira_ticket', 'other-mcp')).prompted).toBe(true);
     expect((await run('smart', 'get_jira_ticket')).prompted).toBe(true);
     expect((await run('manual', 'get_jira_ticket')).prompted).toBe(true);
-  });
+    }, 20000);
   it('other elicitations (forms, URLs, unknown threads) are still unsupported', async () => {
     const c = new FakeClient();
     const t = setup(c);
@@ -917,7 +957,7 @@ describe('/usage', () => {
     output.on('data', (d) => { text += d.toString(); });
     return { input, done: runTui(client, '/w', { input, output }, { router }), text: () => text };
   };
-  const wait = (ms = 60) => new Promise((r) => setTimeout(r, ms));
+  const wait = (ms = 150) => new Promise((r) => setTimeout(r, ms));
 
   it('shows Codex account limits, account tokens and this session\'s tokens as reported by the App Server', async () => {
     const c = new FakeClient();
@@ -971,7 +1011,7 @@ describe('resume loads chat history', () => {
     output.on('data', (d) => { text += d.toString(); });
     return { input, done: runTui(client, '/w', { input, output }, { router, resume }), text: () => text };
   };
-  const wait = (ms = 80) => new Promise((r) => setTimeout(r, ms));
+  const wait = (ms = 150) => new Promise((r) => setTimeout(r, ms));
 
   it('/resume N replays the previous conversation (prompts, tool steps, answers) and continues on the same thread', async () => {
     const c = new FakeClient();
@@ -1023,7 +1063,7 @@ describe('shutdown: signals and cleanup', () => {
     output.on('data', (d) => { text += d.toString(); });
     return { input, output, done: runTui(client, '/w', { input, output }, { router }), text: () => text };
   };
-  const wait = (ms = 50) => new Promise((r) => setTimeout(r, ms));
+  const wait = (ms = 150) => new Promise((r) => setTimeout(r, ms));
   const listeners = () => ['SIGINT', 'SIGHUP', 'SIGTERM'].map((s) => process.listenerCount(s as NodeJS.Signals));
 
   it.each([['SIGTERM', 143], ['SIGHUP', 129], ['SIGINT', 130]] as const)('%s: restores the terminal, stops the App Server, exits %i, leaves no listeners', async (sig, code) => {
@@ -1090,11 +1130,11 @@ describe('staged execution in the TUI (adaptive routing)', () => {
     expect(t.text()).not.toContain('Switching model');
     t.input.end(); await t.done;
   });
-  it('a security review is one stage on the stronger model (risk → model, not stages)', async () => {
+  it('a security review is one stage on the stronger model, with analysis-level reasoning (risk → model, depth → reasoning)', async () => {
     const c = new FakeClient();
     const t = setup(c);
     t.input.write('Review this authentication middleware\n'); await wait();
-    expect(turns(c).map((p) => `${p.model}/${p.effort}`)).toEqual(['gpt-6-sol/high']);
+    expect(turns(c).map((p) => `${p.model}/${p.effort}`)).toEqual(['gpt-6-sol/medium']);
     t.input.end(); await t.done;
   });
   it('failing tests escalate within the same request: real second turn on a stronger model, shown in the UI with token totals', async () => {
@@ -1108,7 +1148,7 @@ describe('staged execution in the TUI (adaptive routing)', () => {
     t.input.write('Add CSV export with tests\n'); await wait(300);
     expect(turns(c).map((p) => `${p.model}/${p.effort}/${p.threadId}`)).toEqual(['gpt-6-luna/medium/t1', 'gpt-6-sol/high/t1']);
     const out = t.text();
-    expect(out).toContain('↪ Switching model: GPT-6 Luna → GPT-6 Sol');
+    expect(out).toMatch(/↪ Switching model\n\s+GPT-6 Luna → GPT-6 Sol\n/);
     expect(out).toContain('Reason: tests still failing after previous stage');
     expect(out).toContain('Strategy: Adaptive · Stages: 2 · Models: GPT-6 Luna → GPT-6 Sol · Switches: 1 · Escalations: 1 · Tokens: in 28,000 (cached 22,000) out 420');
     expect(out.match(/Completed in/g)).toHaveLength(1);
@@ -1184,7 +1224,7 @@ describe('slash-command palette (TTY)', () => {
     output.on('data', (d) => { text += d.toString(); });
     return { input, output, done: runTui(client, '/w', { input, output }, { router }), screen: () => emulate(text), text: () => text };
   };
-  const wait = (ms = 40) => new Promise((r) => setTimeout(r, ms));
+  const wait = (ms = 150) => new Promise((r) => setTimeout(r, ms));
   const region = (t: { screen(): string[] }) => { const s = t.screen(); const i = s.lastIndexOf('  Commands'); return i < 0 ? [] : s.slice(i); };
   const inputRow = (t: { screen(): string[] }) => t.screen().filter((r) => r.startsWith('› ')).at(-1);
   const quit = async (t: { input: PassThrough; done: Promise<number> }) => { t.input.write('\x03'); t.input.write('\x04'); await t.done; };
@@ -1212,7 +1252,9 @@ describe('slash-command palette (TTY)', () => {
     expect(t.screen()).not.toContain('  Commands');
     t.input.write('\r'); await wait();
     expect(c.requests.some((r) => r.method === 'thread/list')).toBe(true); // executed
-    expect(t.screen().join('\n')).toContain('1. earlier chat');
+    expect(t.screen().join('\n')).toContain('Resume a conversation'); // the interactive picker opened
+    expect(t.screen().join('\n')).toContain('earlier chat');
+    t.input.write('\x1b'); await wait();
     await quit(t);
   });
   it('arrows navigate (with wrap), Tab completes, and arguments can be typed after completion', async () => {
@@ -1308,7 +1350,7 @@ describe('readability: markdown, wrapping, spacing, approval block (TTY)', () =>
     output.on('data', (d) => { text += d.toString(); });
     return { input, done: runTui(client, '/w', { input, output }, { router }), screen: () => emulate(text), text: () => text };
   };
-  const wait = (ms = 80) => new Promise((r) => setTimeout(r, ms));
+  const wait = (ms = 150) => new Promise((r) => setTimeout(r, ms));
   const quit = async (t: { input: PassThrough; done: Promise<number> }) => { t.input.write('\x03'); t.input.write('\x04'); await t.done; };
 
   it('assistant markdown is rendered and long lines wrap inside the indent (no text at column 0)', async () => {
@@ -1360,7 +1402,7 @@ describe('code blocks: copyable output and /copy', () => {
     const clipboard = async (x: string) => { copied.push(x); return 'clipboard'; };
     return { input, done: runTui(client, '/w', { input, output }, { router, clipboard }), screen: () => emulate(text), text: () => text };
   };
-  const wait = (ms = 80) => new Promise((r) => setTimeout(r, ms));
+  const wait = (ms = 150) => new Promise((r) => setTimeout(r, ms));
   const LONG = `git commit -m "${'x'.repeat(80)}"`;
   const reply = ['Pakai pesan ini:\n\n```text\nfix(logging): redact startup config values\n```\n\nAtau:\n\n```bash\n', `${LONG}\n`, '  indented line\n```\n'];
 
@@ -1432,7 +1474,7 @@ describe('Tab queue and image paste (TTY)', () => {
     output.on('data', (d) => { text += d.toString(); });
     return { input, done: runTui(client, '/w', { input, output }, { router, ...extra }), screen: () => emulate(text) };
   };
-  const wait = (ms = 60) => new Promise((r) => setTimeout(r, ms));
+  const wait = (ms = 150) => new Promise((r) => setTimeout(r, ms));
   const turns = (c: FakeClient) => c.requests.filter((r) => r.method === 'turn/start').map((r) => r.params.input as { type: string; text?: string; path?: string }[]);
   const gated = (c: FakeClient) => {
     const releases: (() => void)[] = [];
@@ -1635,5 +1677,943 @@ describe('ticket workflow: understand → clarify → implement', () => {
     t.input.write('Yes, but also log the move.\r'); await wait();
     expect(t.screen().at(-1)).toMatch(/· OP-559: Ready$/);
     t.input.write('\x03'); t.input.write('\x04'); await t.done;
+  });
+});
+
+describe('/resume picker (TTY)', () => {
+  const NOW = Math.floor(Date.now() / 1000);
+  const setup = (client: FakeClient, rows = 30) => {
+    const router = new TurnRouter(LEGACY, '/nonexistent', CAT);
+    const input = new PassThrough();
+    const output = Object.assign(new PassThrough(), { columns: 90, rows, isTTY: true }) as unknown as NodeJS.WriteStream;
+    let text = '';
+    output.on('data', (d) => { text += d.toString(); });
+    return { input, done: runTui(client, '/w', { input, output }, { router }), screen: () => emulate(text) };
+  };
+  const wait = (ms = 150) => new Promise((r) => setTimeout(r, ms));
+  const quit = async (t: { input: PassThrough; done: Promise<number> }) => { t.input.write('\x03'); t.input.write('\x04'); await t.done; };
+  const threads = [
+    { id: 'aaaaaaaa-1', name: null, preview: 'Fix login button\nmore text', updatedAt: NOW - 3 * 3600 },
+    { id: 'bbbbbbbb-2', name: 'Order list v2 endpoint', preview: 'ganti endpoint', updatedAt: NOW - 120 },
+    { id: 'cccccccc-3', name: null, preview: '', updatedAt: NOW - 3 * 86400 },
+  ];
+  const opened = (t: { screen(): string[] }) => t.screen().filter((r) => /^ {2}[❯ ] /.test(r));
+
+  it('lists real Codex threads newest first with title and last activity; ids only when needed; metadata-only request', async () => {
+    const c = new FakeClient();
+    c.listPage = () => ({ data: threads, nextCursor: null });
+    const t = setup(c);
+    t.input.write('/resume\r'); await wait();
+    const rows = opened(t);
+    expect(rows[0]).toMatch(/^ {2}❯ Order list v2 endpoint\s+2m ago$/);
+    expect(rows[1]).toMatch(/^ {4}Fix login button\s+3h ago$/);
+    expect(rows[2]).toMatch(/^ {4}\(untitled conversation\)\s+3d ago$/);
+    expect(t.screen().join('\n')).not.toContain('aaaaaaaa');
+    const req = c.requests.find((r) => r.method === 'thread/list')!.params;
+    expect(req).toMatchObject({ cwd: '/w', sortKey: 'updated_at', limit: 50 });
+    expect(c.requests.some((r) => r.method === 'thread/read')).toBe(false); // no histories loaded for the picker
+    await quit(t);
+  });
+  it('↑↓ + Enter resumes the chosen conversation and shows it; typing filters by title', async () => {
+    const c = new FakeClient();
+    c.listPage = () => ({ data: threads, nextCursor: null });
+    const t = setup(c);
+    t.input.write('/resume\r'); await wait();
+    t.input.write('\x1b[B'); await wait(20);
+    expect(opened(t).find((r) => r.includes('❯'))).toContain('Fix login button');
+    t.input.write('order'); await wait(20);
+    expect(opened(t)).toHaveLength(1);
+    expect(t.screen().join('\n')).toContain('filter: order');
+    t.input.write('\r'); await wait(100);
+    expect(c.requests.find((r) => r.method === 'thread/resume')!.params.threadId).toBe('bbbbbbbb-2');
+    const s = t.screen().join('\n');
+    expect(s).toContain('resumed bbbbbbbb');
+    expect(s).toContain('end of previous conversation'); // history displayed
+    expect(s).not.toContain('Resume a conversation');
+    t.input.write('continue\r'); await wait(100);
+    expect(c.requests.filter((r) => r.method === 'turn/start').at(-1)!.params.threadId).toBe('bbbbbbbb-2'); // context preserved
+    await quit(t);
+  });
+  it('Esc cancels without changing the conversation; empty list has a helpful message', async () => {
+    const c = new FakeClient();
+    c.listPage = () => ({ data: [], nextCursor: null });
+    const t = setup(c);
+    t.input.write('/resume\r'); await wait();
+    expect(t.screen().join('\n')).toContain('No saved conversations in this directory yet');
+    t.input.write('\x1b'); await wait();
+    expect(t.screen().join('\n')).toContain('resume cancelled');
+    expect(c.requests.some((r) => r.method === 'thread/resume')).toBe(false);
+    expect(t.screen().join('\n')).not.toContain('Resume a conversation');
+    await quit(t);
+  });
+  it('a deleted/unavailable conversation is reported and the current one stays active', async () => {
+    const c = new FakeClient();
+    c.listPage = () => ({ data: threads, nextCursor: null });
+    c.missing = ['bbbbbbbb-2'];
+    const t = setup(c);
+    t.input.write('hello\r'); await wait(100);
+    t.input.write('/resume\r'); await wait();
+    t.input.write('\r'); await wait(100);
+    expect(t.screen().join('\n')).toMatch(/could not resume bbbbbbbb: thread not found[\s\S]*current conversation is unchanged/);
+    t.input.write('next\r'); await wait(100);
+    expect(c.requests.filter((r) => r.method === 'turn/start').at(-1)!.params.threadId).toBe('t1');
+    await quit(t);
+  });
+  it('large lists load page by page as you scroll, and a filter keeps paging until something matches', async () => {
+    const c = new FakeClient();
+    const all = Array.from({ length: 130 }, (_, i) => ({ id: `id${String(i).padStart(4, '0')}-x`, name: `conversation ${i}${i === 120 ? ' needle' : ''}`, preview: '', updatedAt: NOW - i * 60 }));
+    c.listPage = (p) => { const from = Number(p.cursor ?? 0); return { data: all.slice(from, from + 50), nextCursor: from + 50 < all.length ? String(from + 50) : null }; };
+    const t = setup(c, 20);
+    t.input.write('/resume\r'); await wait();
+    expect(c.requests.filter((r) => r.method === 'thread/list')).toHaveLength(1);
+    expect(t.screen().join('\n')).toContain('1/50+');
+    for (let i = 0; i < 48; i++) t.input.write('\x1b[B');
+    await wait(100);
+    expect(c.requests.filter((r) => r.method === 'thread/list').map((r) => r.params.cursor ?? null)).toEqual([null, '50']);
+    t.input.write('needle'); await wait(150);
+    expect(c.requests.filter((r) => r.method === 'thread/list').map((r) => r.params.cursor ?? null)).toEqual([null, '50', '100']);
+    expect(opened(t)).toHaveLength(1);
+    expect(opened(t)[0]).toContain('conversation 120 needle');
+    expect(t.screen().every((r) => r.length <= 90)).toBe(true);
+    await quit(t);
+  });
+});
+
+describe('/diff viewer (TTY)', () => {
+  it('lists changes, opens a file diff, scrolls, goes back and closes — without touching the repo', async () => {
+    const d = fs.mkdtempSync(path.join(os.tmpdir(), 'lum-tdiff-'));
+    const g = (...a: string[]) => execFileSync('git', a, { cwd: d, stdio: 'pipe' });
+    g('init', '-q'); g('config', 'user.email', 't@t'); g('config', 'user.name', 't');
+    fs.writeFileSync(path.join(d, 'app.ts'), Array.from({ length: 60 }, (_, i) => `line ${i}`).join('\n'));
+    g('add', '-A'); g('commit', '-qm', 'init');
+    fs.writeFileSync(path.join(d, 'app.ts'), Array.from({ length: 60 }, (_, i) => (i % 5 === 0 ? `changed ${i}` : `line ${i}`)).join('\n'));
+    fs.writeFileSync(path.join(d, 'new.md'), 'hi\n');
+    const before = execFileSync('git', ['status', '--porcelain'], { cwd: d, encoding: 'utf8' });
+    const router = new TurnRouter(LEGACY, '/nonexistent', CAT);
+    const input = new PassThrough();
+    const output = Object.assign(new PassThrough(), { columns: 80, rows: 24, isTTY: true }) as unknown as NodeJS.WriteStream;
+    let text = '';
+    output.on('data', (x) => { text += x.toString(); });
+    const done = runTui(new FakeClient(), d, { input, output }, { router });
+    const wait = (ms = 150) => new Promise((r) => setTimeout(r, ms));
+    const screen = () => emulate(text).join('\n');
+    input.write('/diff\r'); await wait(200);
+    expect(screen()).toContain('Changes · 2 files · +13 −12 · read-only');
+    expect(screen()).toMatch(/❯ M app\.ts\s+\+12 −12/);
+    expect(screen()).toMatch(/\? new\.md\s+\+1/);
+    input.write('\r'); await wait(200);
+    expect(screen()).toMatch(/M app\.ts · unstaged · \+12 −12 · 1–15\/\d+/);
+    expect(text).toContain('\x1b[31m-line 0\x1b[39m');
+    expect(text).toContain('\x1b[32m+changed 0\x1b[39m');
+    input.write('\x1b[6~'); await wait();
+    expect(screen()).toMatch(/· 15–29\/\d+/);
+    input.write('\x1b'); await wait();
+    expect(screen()).toContain('Changes · 2 files');
+    input.write('\x1b'); await wait();
+    expect(emulate(text).slice(-4)[1]).toBe('› Ask Lumina anything...');
+    expect(emulate(text).join('\n')).not.toMatch(/Changes · 2 files[\s\S]*› Ask Lumina anything/);
+    expect(execFileSync('git', ['status', '--porcelain'], { cwd: d, encoding: 'utf8' })).toBe(before); // read-only
+    input.write('\x03'); input.write('\x04'); await done;
+  });
+  it('outside a git repository /diff explains the problem', async () => {
+    const router = new TurnRouter(LEGACY, '/nonexistent', CAT);
+    const input = new PassThrough();
+    const output = Object.assign(new PassThrough(), { columns: 80, rows: 24, isTTY: false }) as unknown as NodeJS.WriteStream;
+    let text = '';
+    output.on('data', (x) => { text += x.toString(); });
+    const done = runTui(new FakeClient(), fs.mkdtempSync(path.join(os.tmpdir(), 'lum-nogit-')), { input, output }, { router });
+    input.write('/diff\n'); await new Promise((r) => setTimeout(r, 150));
+    expect(text).toMatch(/\/diff: not a git repository/);
+    input.end(); await done;
+  });
+});
+
+describe('checkpoints and /rollback', () => {
+  const repo = () => {
+    const d = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'lum-tcp-')));
+    const g = (...a: string[]) => execFileSync('git', a, { cwd: d, stdio: 'pipe' });
+    g('init', '-q'); g('config', 'user.email', 't@t'); g('config', 'user.name', 't');
+    fs.writeFileSync(path.join(d, 'app.ts'), 'v1\n');
+    g('add', '-A'); g('commit', '-qm', 'init');
+    fs.writeFileSync(path.join(d, 'notes.md'), 'my own work\n'); // pre-existing user change
+    return d;
+  };
+  const run = (d: string, tty: boolean, opts: Record<string, unknown> = {}) => {
+    // the "agent" edits a file and creates one during its turn
+    const c = new FakeClient((t) => { if (!t.startsWith('explain')) { fs.writeFileSync(path.join(d, 'app.ts'), 'v2\n'); fs.writeFileSync(path.join(d, 'gen.ts'), 'x\n'); } return ['done']; });
+    const input = new PassThrough();
+    const output = Object.assign(new PassThrough(), { columns: 100, rows: 30, isTTY: tty }) as unknown as NodeJS.WriteStream;
+    let text = '';
+    output.on('data', (x) => { text += x.toString(); });
+    const done = runTui(c, d, { input, output }, { router: new TurnRouter(LEGACY, '/nonexistent', CAT), ...opts });
+    return { input, done, text: () => text, screen: () => emulate(text).join('\n') };
+  };
+  const wait = (ms = 150) => new Promise((r) => setTimeout(r, ms));
+  const read = (d: string, f: string) => (fs.existsSync(path.join(d, f)) ? fs.readFileSync(path.join(d, f), 'utf8') : null);
+
+  it('a turn records a checkpoint; /checkpoints lists it; /rollback shows the plan, n cancels, y restores only Lumina changes', async () => {
+    const d = repo();
+    const t = run(d, false);
+    t.input.write('add a feature\n'); await wait(400);
+    const id = /checkpoint ([a-z0-9]{12}) · 2 files changed · \/rollback to undo/.exec(t.text())?.[1];
+    expect(id).toBeTruthy();
+    t.input.write('/checkpoints\n'); await wait();
+    expect(t.text()).toMatch(new RegExp(`${id}  .*active\\s+2 files  add a feature`));
+    t.input.write(`/rollback ${id!.slice(0, 6)}\n`); await wait();
+    expect(t.text()).toMatch(/restore\s+app\.ts[\s\S]*delete\s+gen\.ts[\s\S]*\[y\] Roll back {3}\[n\] Cancel/);
+    expect(t.text()).not.toMatch(/notes\.md/);
+    t.input.write('n\n'); await wait();
+    expect(t.text()).toContain('rollback cancelled; nothing was changed');
+    expect(read(d, 'app.ts')).toBe('v2\n');
+    t.input.write(`/rollback ${id}\n`); await wait();
+    t.input.write('y\n'); await wait();
+    expect(t.text()).toContain(`✓ rolled back checkpoint ${id}: 2 files restored`);
+    expect([read(d, 'app.ts'), read(d, 'gen.ts'), read(d, 'notes.md')]).toEqual(['v1\n', null, 'my own work\n']);
+    t.input.write('/checkpoints\n'); await wait();
+    expect(t.text()).toMatch(/rolled-back/);
+    t.input.end(); await t.done;
+  });
+  it('a manual edit after the turn blocks the rollback (nothing written); answering anything but y/n re-asks', async () => {
+    const d = repo();
+    const t = run(d, false);
+    t.input.write('add a feature\n'); await wait(400);
+    const id = /checkpoint ([a-z0-9]{12})/.exec(t.text())![1];
+    fs.writeFileSync(path.join(d, 'app.ts'), 'edited by hand\n');
+    t.input.write(`/rollback ${id}\n`); await wait();
+    expect(t.text()).toMatch(/✗ restore\s+app\.ts\s+\(changed after Lumina edited it[\s\S]*Rollback not possible/);
+    expect([read(d, 'app.ts'), read(d, 'gen.ts')]).toEqual(['edited by hand\n', 'x\n']);
+    fs.writeFileSync(path.join(d, 'app.ts'), 'v2\n'); // user puts it back: rollback is possible again
+    t.input.write(`/rollback ${id}\n`); await wait();
+    t.input.write('maybe\n'); await wait();
+    expect(t.text()).toContain('Please answer y or n');
+    fs.writeFileSync(path.join(d, 'app.ts'), 'edited during the prompt\n'); // changed between preview and confirm
+    t.input.write('y\n'); await wait();
+    expect(t.text()).toMatch(/✗ .*changed since/);
+    expect(read(d, 'app.ts')).toBe('edited during the prompt\n');
+    t.input.end(); await t.done;
+  });
+  it('TTY: /rollback opens a picker; Enter reviews the selected checkpoint; Esc cancels', async () => {
+    const d = repo();
+    const t = run(d, true);
+    t.input.write('add a feature\r'); await wait(400);
+    t.input.write('/rollback\r'); await wait();
+    expect(t.screen()).toMatch(/Roll back a checkpoint · 1 · type to filter · ↑↓ · Enter review · Esc cancel/);
+    expect(t.screen()).toMatch(/❯ add a feature · 2 files/);
+    t.input.write('\r'); await wait();
+    expect(t.screen()).toMatch(/Rollback checkpoint [a-z0-9]{12}[\s\S]*restore\s+app\.ts/);
+    t.input.write('y\r'); await wait();
+    expect(read(d, 'app.ts')).toBe('v1\n');
+    t.input.write('/rollback\r'); await wait();
+    expect(t.screen()).toContain('No checkpoints to roll back.');
+    t.input.write('\x1b'); await wait();
+    expect(t.screen()).toContain('rollback cancelled');
+    t.input.write('\x03'); t.input.write('\x04'); await t.done;
+  });
+  it('read-only sessions record no checkpoint; outside git a turn still runs and /checkpoints explains why', async () => {
+    const d = repo();
+    const t = run(d, false, { policy: { approvalPolicy: 'never', sandbox: 'read-only', approvalsReviewer: 'user' } });
+    t.input.write('explain this\n'); await wait(300);
+    t.input.write('/checkpoints\n'); await wait();
+    expect(t.text()).toContain('No checkpoints yet');
+    t.input.end(); await t.done;
+    const n = run(fs.mkdtempSync(path.join(os.tmpdir(), 'lum-nogit-')), false);
+    n.input.write('explain this\n'); await wait(300);
+    expect(n.text()).toContain('done');
+    n.input.write('/checkpoints\n'); await wait();
+    expect(n.text()).toMatch(/checkpoints unavailable: not a git repository/);
+    n.input.end(); await n.done;
+  });
+});
+
+describe('/repo', () => {
+  it('maps the repository in the background at startup and shows it; refresh re-indexes; turns are not delayed', async () => {
+    const d = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'lum-trepo-')));
+    execFileSync('git', ['init', '-q'], { cwd: d });
+    fs.writeFileSync(path.join(d, 'go.mod'), 'module example.com/svc\nrequire github.com/gin-gonic/gin v1\n');
+    fs.mkdirSync(path.join(d, 'cmd', 'api'), { recursive: true });
+    fs.writeFileSync(path.join(d, 'cmd', 'api', 'main.go'), 'package main');
+    const input = new PassThrough();
+    const output = Object.assign(new PassThrough(), { columns: 100, isTTY: false }) as unknown as NodeJS.WriteStream;
+    let text = '';
+    output.on('data', (x) => { text += x.toString(); });
+    const c = new FakeClient();
+    const done = runTui(c, d, { input, output }, { router: new TurnRouter(LEGACY, '/nonexistent', CAT) });
+    const wait = (ms = 200) => new Promise((r) => setTimeout(r, ms));
+    input.write('hello\n'); await wait();
+    expect(text).toContain('echo:hello');
+    input.write('/repo\n'); await wait();
+    expect(text).toMatch(/Project: svc\nRoot: .*\nStack: Go \/ Gin\nPackage managers: Go modules\n[\s\S]*Entry Points:\n- cmd\/api\/main\.go[\s\S]*Indexed: just now · /);
+    input.write('/repo refresh\n'); await wait();
+    expect(text.match(/Indexed: just now · /g)).toHaveLength(2); // the startup index is reused, refresh builds anew (never "(cached)")
+    input.write('/repo nope\n'); await wait(80);
+    expect(text).toContain('usage: /repo [refresh]');
+    input.end(); await done;
+  });
+});
+
+describe('smart context in turns', () => {
+  it('hints are prepended to the turn once (paths + symbols only), skipped for trivial prompts, and given again after /new', async () => {
+    const d = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'lum-tctx-')));
+    execFileSync('git', ['init', '-q'], { cwd: d });
+    fs.mkdirSync(path.join(d, 'src', 'services'), { recursive: true });
+    fs.writeFileSync(path.join(d, 'src', 'services', 'orders.ts'), 'export function listOrders() {}\n');
+    fs.writeFileSync(path.join(d, 'src', 'services', 'users.ts'), 'export function listUsers() {}\n');
+    const input = new PassThrough();
+    const output = Object.assign(new PassThrough(), { columns: 100, isTTY: false }) as unknown as NodeJS.WriteStream;
+    let text = '';
+    output.on('data', (x) => { text += x.toString(); });
+    const c = new FakeClient();
+    const done = runTui(c, d, { input, output }, { router: new TurnRouter(LEGACY, '/nonexistent', CAT) });
+    const wait = (ms = 250) => new Promise((r) => setTimeout(r, ms));
+    const sent = () => c.requests.filter((r) => r.method === 'turn/start').map((r) => r.params.input[0].text as string);
+    input.write('fix the orders sorting\n'); await wait();
+    expect(sent()[0]).toMatch(/^\[Lumina context hints: [^\n]*\]\n- src\/services\/orders\.ts — listOrders \(L1\)\n\nfix the orders sorting$/);
+    expect(sent()[0]).not.toContain('users');
+    expect(text).toContain('context hints: 1 file');
+    input.write('also fix orders paging\n'); await wait();
+    expect(sent()[1]).toBe('also fix orders paging'); // nothing new to say
+    input.write('thanks\n'); await wait();
+    expect(sent()[2]).toBe('thanks');
+    input.write('/new\n'); await wait(80);
+    input.write('fix orders again\n'); await wait();
+    expect(sent()[3]).toContain('- src/services/orders.ts');
+    input.end(); await done;
+  });
+});
+
+describe('automatic skill selection in turns', () => {
+  const setup = () => {
+    const input = new PassThrough();
+    const output = Object.assign(new PassThrough(), { columns: 120, isTTY: false }) as unknown as NodeJS.WriteStream;
+    let text = '';
+    output.on('data', (x) => { text += x.toString(); });
+    const c = new FakeClient();
+    const done = runTui(c, '/w', { input, output }, { router: new TurnRouter(LEGACY, '/nonexistent', CAT) });
+    return { c, input, done, text: () => text };
+  };
+  const wait = (ms = 200) => new Promise((r) => setTimeout(r, ms));
+  const items = (c: FakeClient) => c.requests.filter((r) => r.method === 'turn/start').map((r) => r.params.input.slice(1));
+
+  it('a matching skill is attached as a native Codex skill item (Codex loads SKILL.md); /why explains; unrelated prompts attach nothing', async () => {
+    const t = setup();
+    t.input.write('please greet the zebra\n'); await wait();
+    expect(items(t.c)[0]).toEqual([{ type: 'skill', name: 'zebra-greeting', path: '/w/.agents/skills/zebra-greeting/SKILL.md' }]);
+    expect(t.text()).toContain('skills: $zebra-greeting (selected automatically · /why)');
+    t.input.write('/why\n'); await wait(80);
+    expect(t.text()).toMatch(/Skill: zebra-greeting \[project\]\nWhy: its name matches "zebra", "greet"\nAbout: Use when asked to greet the zebra\nRequest: "please greet the zebra"/);
+    t.input.write('fix the login form validation\n'); await wait();
+    expect(items(t.c)[1]).toEqual([]);
+    t.input.write('/why\n'); await wait(80);
+    expect(t.text()).toContain('No skill was selected for the last request');
+    expect(t.c.requests.filter((r) => r.method === 'skills/list')).toHaveLength(1); // metadata cached; no model calls to choose
+    t.input.end(); await t.done;
+  });
+  it('explicit $skill wins over automatic selection; skills/list failure falls back to no skills', async () => {
+    const t = setup();
+    t.input.write('$caveman greet the zebra\n'); await wait();
+    expect(items(t.c)[0]).toEqual([{ type: 'skill', name: 'caveman', path: '/home/.agents/skills/caveman/SKILL.md' }]);
+    t.input.write('/why\n'); await wait(80);
+    expect(t.text()).toMatch(/Skills: \$caveman \[global\]\nWhy: you invoked it explicitly/);
+    const orig = t.c.request;
+    t.c.request = (async (m: string, p: Record<string, any>) => { if (m === 'skills/list') throw new Error('down'); return orig(m, p); }) as AppClient['request'];
+    t.c.emit('skills/changed', {});
+    t.input.write('please greet the zebra\n'); await wait();
+    expect(items(t.c)[1]).toEqual([]);
+    expect(t.text()).toContain('echo:please greet the zebra'); // the turn still ran
+    t.input.end(); await t.done;
+  });
+});
+
+describe('/context metrics', () => {
+  const run = (d: string, cfg: Record<string, unknown> = {}) => {
+    const input = new PassThrough();
+    const output = Object.assign(new PassThrough(), { columns: 120, isTTY: false }) as unknown as NodeJS.WriteStream;
+    let text = '';
+    output.on('data', (x) => { text += x.toString(); });
+    const c = new FakeClient();
+    c.onTurn = async (threadId) => {
+      c.emit('item/completed', { threadId, item: { type: 'commandExecution', command: 'sed -n 1,40p src/services/orders.ts', status: 'completed', exitCode: 0, commandActions: [{ type: 'read', command: 'sed', name: 'orders.ts', path: path.join(d, 'src/services/orders.ts') }] } });
+      c.emit('thread/tokenUsage/updated', { threadId, tokenUsage: { total: { totalTokens: 83700, inputTokens: 82500, cachedInputTokens: 70000, outputTokens: 1200 }, last: { totalTokens: 83700 }, modelContextWindow: 250000 } });
+      c.emit('turn/completed', { threadId, turn: { status: 'completed', error: null } });
+    };
+    const router = new TurnRouter(ConfigSchema.parse({ stages: { enabled: false }, ...cfg }), '/nonexistent', CAT);
+    return { c, input, text: () => text, done: runTui(c, d, { input, output }, { router }) };
+  };
+  const repo = () => {
+    const d = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'lum-tmet-')));
+    execFileSync('git', ['init', '-q'], { cwd: d });
+    fs.mkdirSync(path.join(d, 'src', 'services'), { recursive: true });
+    fs.writeFileSync(path.join(d, 'src', 'services', 'orders.ts'), 'export function listOrders() { /* SECRET_CODE_BODY */ }\n');
+    return d;
+  };
+  const wait = (ms = 300) => new Promise((r) => setTimeout(r, ms));
+
+  it('collects retrieval, files read and provider-reported tokens per request; logs numbers only; /new resets', async () => {
+    const d = repo();
+    const log = path.join(process.env.SMART_CODEX_HOME!, 'routing.jsonl');
+    const before = fs.existsSync(log) ? fs.readFileSync(log, 'utf8').length : 0;
+    const t = run(d);
+    t.input.write('/context\n'); await wait(80);
+    expect(t.text()).toContain('No request has finished in this session yet.');
+    t.input.write('fix the orders sorting\n'); await wait();
+    t.input.write('/context\n'); await wait(80);
+    const out = t.text();
+    expect(out).toMatch(/Indexed files: 1 · map \d+s old/);
+    expect(out).toContain('Candidate files: 1 · Selected: 1');
+    expect(out).toContain('Files read by Codex: 1 (1 of them hinted)');
+    expect(out).toContain("Cache: file list miss · symbols 1 hit / 1 miss"); // read once, reused for the import scan
+    expect(out).toContain('Input: 82,500 tokens · Cached: 70,000 · Output: 1,200');
+    expect(out).not.toMatch(/^context: /m); // per-request summary is off by default
+    const entries = fs.readFileSync(log, 'utf8').slice(before).trim().split('\n').map((l) => JSON.parse(l)).filter((e) => e.event === 'context_metrics');
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).toMatchObject({ files_read: 1, selected_files: 1, input_tokens: 82500, usage_reported: true });
+    expect(JSON.stringify(entries[0])).not.toMatch(/orders|SECRET_CODE_BODY|fix the/);
+    t.input.write('/new\n'); await wait(80);
+    t.input.write('/context\n'); await wait(80);
+    expect(t.text().split('No request has finished').length).toBe(3);
+    t.input.end(); await t.done;
+  });
+  it('summary line when enabled; nothing collected or logged when disabled', async () => {
+    const d = repo();
+    const s = run(d, { metrics: { summary: true } });
+    s.input.write('fix the orders sorting\n'); await wait();
+    expect(s.text()).toMatch(/context: 1 hinted · 1 read · in 82,500 \(cached 70,000\) out 1,200 · retrieval \d+ms/);
+    s.input.end(); await s.done;
+    const log = path.join(process.env.SMART_CODEX_HOME!, 'routing.jsonl');
+    const before = fs.existsSync(log) ? fs.readFileSync(log, 'utf8').length : 0;
+    const t = run(repo(), { metrics: { enabled: false } });
+    t.input.write('fix the orders sorting\n'); await wait();
+    t.input.write('/context\n'); await wait(80);
+    expect(t.text()).toContain('Context metrics are disabled');
+    expect((fs.existsSync(log) ? fs.readFileSync(log, 'utf8').slice(before) : '')).not.toContain('context_metrics');
+    t.input.end(); await t.done;
+  });
+});
+
+describe('smart verification after a turn', () => {
+  const repo = () => {
+    const d = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'lum-tver-')));
+    const w = (f: string, c: string) => { fs.mkdirSync(path.dirname(path.join(d, f)), { recursive: true }); fs.writeFileSync(path.join(d, f), c); };
+    w('package.json', JSON.stringify({ type: 'module', scripts: { test: 'node --test', lint: 'node -e "process.exit(0)"' } }));
+    w('src/math.js', 'export const add = (a, b) => a + b;\n');
+    w('test/math.test.js', "import test from 'node:test';\nimport assert from 'node:assert/strict';\nimport { add } from '../src/math.js';\ntest('add', () => assert.equal(add(2, 3), 5));\n");
+    execFileSync('git', ['init', '-q'], { cwd: d });
+    execFileSync('git', ['add', '-A'], { cwd: d });
+    execFileSync('git', ['-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-qm', 'init'], { cwd: d });
+    return d;
+  };
+  const run = (d: string, body: string, extra: Record<string, unknown> = {}) => {
+    const input = new PassThrough();
+    const output = Object.assign(new PassThrough(), { columns: 120, isTTY: false }) as unknown as NodeJS.WriteStream;
+    let text = '';
+    output.on('data', (x) => { text += x.toString(); });
+    const c = new FakeClient();
+    let n = 0;
+    c.onTurn = async (threadId) => {
+      fs.writeFileSync(path.join(d, 'src/math.js'), `${body}// turn ${++n}\n`);
+      c.emit('item/completed', { threadId, item: { type: 'fileChange', id: 'f', status: 'completed', changes: [{ path: path.join(d, 'src/math.js') }] } });
+      c.emit('turn/completed', { threadId, turn: { status: 'completed', error: null } });
+    };
+    return { c, input, text: () => text, done: runTui(c, d, { input, output }, { router: new TurnRouter(LEGACY, '/nonexistent', CAT), ...extra }) };
+  };
+  const wait = (ms = 1500) => new Promise((r) => setTimeout(r, ms));
+
+  it('manual mode asks once, runs the related test, reports; a failure goes into the next request', async () => {
+    const d = repo();
+    const t = run(d, 'export const add = (a, b) => a - b;\n', { router: new TurnRouter(ConfigSchema.parse({ stages: { enabled: false }, self_healing: { enabled: false } }), '/nonexistent', CAT) });
+    t.input.write('make add faster\n'); await wait(700);
+    expect(t.text()).toMatch(/Run verification\?\n {2}npm test -- test\/math\.test\.js\n\n\[y\] Run {3}\[n\] Skip/);
+    t.input.write('y\n'); await wait();
+    const out = t.text();
+    expect(out).toMatch(/✗ 1 relevant test file \(npm test -- test\/math\.test\.js\) \d+(ms|s) — test failure/);
+    expect(out).toMatch(/Verification: Quick · 1 file in src\/math\.js/);
+    expect(out).toMatch(/Skipped:\n {4}Lint \(not required for this change\)\n {4}Full test suite \(not required for this change\)/);
+    t.input.write('fix it\n'); await wait(700);
+    const sent = t.c.requests.filter((r) => r.method === 'turn/start').map((r) => r.params.input[0].text as string);
+    expect(sent[1]).toMatch(/^\[Lumina verification after your last change: `npm test -- test\/math\.test\.js` failed \(test failure, exit 1\)/);
+    t.input.end(); await t.done;
+  }, 20000);
+  it('auto approval mode runs without asking; "skip the tests" is respected; /verify full verifies the working tree', async () => {
+    const d = repo();
+    const t = run(d, 'export const add = (a, b) => a + b; // faster\n', { approvalMode: 'auto' });
+    t.input.write('make add faster\n'); await wait();
+    expect(t.text()).not.toContain('Run verification?');
+    expect(t.text()).toMatch(/✓ 1 relevant test file \(npm test -- test\/math\.test\.js\)/);
+    t.input.write('tweak add again but skip the tests\n'); await wait(700);
+    expect(t.text()).toContain('Verification: off (you asked to skip verification)');
+    t.input.write('/verify full\n'); await wait(2500);
+    expect(t.text()).toMatch(/Verification: Full · verification\.mode = full|Verification: Full/);
+    expect(t.text()).toMatch(/✓ Lint \(npm run lint\)/);
+    expect(t.text()).toMatch(/✓ Full test suite \(npm test\)/);
+    t.input.write('/verify full\n'); await wait(1500);
+    expect(t.text()).toMatch(/✓ Full test suite · unchanged since it last passed/);
+    t.input.end(); await t.done;
+  }, 30000);
+});
+
+describe('self-healing after verification', () => {
+  const repo = (testScript = 'node --test') => {
+    const d = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'lum-theal-')));
+    const w = (f: string, c: string) => { fs.mkdirSync(path.dirname(path.join(d, f)), { recursive: true }); fs.writeFileSync(path.join(d, f), c); };
+    w('package.json', JSON.stringify({ type: 'module', scripts: { test: testScript } }));
+    w('src/math.js', 'export const add = (a, b) => a + b;\n');
+    w('test/math.test.js', "import test from 'node:test';\nimport assert from 'node:assert/strict';\nimport { add } from '../src/math.js';\ntest('add', () => assert.equal(add(2, 3), 5));\n");
+    execFileSync('git', ['init', '-q'], { cwd: d });
+    execFileSync('git', ['add', '-A'], { cwd: d });
+    execFileSync('git', ['-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-qm', 'init'], { cwd: d });
+    return d;
+  };
+  /** Turn n writes bodies[n-1] to src/math.js; `approve` makes the repair turn ask for a command approval first. */
+  const run = (d: string, bodies: string[], extra: Record<string, unknown> = {}, approve = false) => {
+    const input = new PassThrough();
+    const output = Object.assign(new PassThrough(), { columns: 140, isTTY: false }) as unknown as NodeJS.WriteStream;
+    let text = '';
+    output.on('data', (x) => { text += x.toString(); });
+    const c = new FakeClient();
+    const decisions: unknown[] = [];
+    let n = 0;
+    c.onTurn = async (threadId) => {
+      const i = n++;
+      if (approve && i === 1) decisions.push(await c.serverHandler!('item/commandExecution/requestApproval', { threadId, command: 'node scripts/fixer.js', cwd: d }));
+      fs.writeFileSync(path.join(d, 'src/math.js'), bodies[Math.min(i, bodies.length - 1)]);
+      c.emit('item/completed', { threadId, item: { type: 'fileChange', id: `f${i}`, status: 'completed', changes: [{ path: path.join(d, 'src/math.js') }] } });
+      c.emit('turn/completed', { threadId, turn: { status: 'completed', error: null } });
+    };
+    const router = new TurnRouter(ConfigSchema.parse({ stages: { enabled: false, tiers: { fast: 'gpt-6-luna', balanced: 'gpt-6-sol', advanced: 'gpt-6-sol' } } }), '/nonexistent', CAT);
+    return { c, input, decisions, text: () => text, done: runTui(c, d, { input, output }, { router, approvalMode: 'auto', ...extra }) };
+  };
+  const until = async (f: () => boolean, ms = 15000) => { const t0 = Date.now(); while (!f() && Date.now() - t0 < ms) await new Promise((r) => setTimeout(r, 50)); };
+  const turns = (c: FakeClient) => c.requests.filter((r) => r.method === 'turn/start');
+
+  it('a broken change is repaired in one focused fix turn and re-verified; both changes are checkpointed', async () => {
+    const d = repo();
+    const t = run(d, ['export const add = (a, b) => a - b;\n', 'export const add = (a, b) => a + b; // fixed\n']);
+    t.input.write('make add faster\n');
+    await until(() => /Repair successful/.test(t.text()));
+    const out = t.text();
+    expect(out).toMatch(/✗ 1 relevant test file .* — test failure/);
+    expect(out).toMatch(/Self-Healing: Attempt 1\/2 · GPT-6 Luna · medium · same model and reasoning that made the change/);
+    expect(out).toMatch(/✓ 1 relevant test file \(npm test -- test\/math\.test\.js\)/);
+    expect(out).toContain('✓ Repair successful\n✓ Verification passed');
+    const repair = turns(t.c)[1].params;
+    expect(repair.input[0].text).toMatch(/^\[Lumina stage 1: Fix failing checks\][\s\S]*npm test -- test\/math\.test\.js[\s\S]*do not restart the original task/);
+    expect(repair.input).toHaveLength(1); // no skills/images re-sent
+    t.input.write('/checkpoints\n'); await until(() => /self-heal attempt 1/.test(t.text()));
+    expect(t.text()).toMatch(/active\s+1 file\s+self-heal attempt 1: make add faster/);
+    t.input.write('fix more\n'); await until(() => turns(t.c).length === 3);
+    expect(turns(t.c)[2].params.input[0].text).toBe('fix more'); // a successful repair leaves no failure context behind
+    t.input.end(); await t.done;
+  }, 40000);
+  it('repeated failure: exhausted after the attempt limit, manual intervention reported, failure handed to the next request', async () => {
+    const d = repo();
+    const t = run(d, ['export const add = (a, b) => a - b;\n', 'export const add = (a, b) => a * b;\n', 'export const add = (a, b) => b - a;\n']);
+    t.input.write('make add faster\n');
+    await until(() => /Automatic repair/.test(t.text()), 30000);
+    const out = t.text();
+    expect(out).toMatch(/✗ Automatic repair (exhausted|stopped)/);
+    expect(out).toMatch(/Attempts: [12]/);
+    expect(out).toMatch(/Last error: test failure in `npm test -- test\/math\.test\.js`/);
+    expect(out).toContain('Manual intervention required.');
+    expect(turns(t.c).length).toBeLessThanOrEqual(3);
+    t.input.end(); await t.done;
+  }, 60000);
+  it('environment failure (test runner missing) never triggers a code change', async () => {
+    const d = repo('vitest-does-not-exist run');
+    fs.writeFileSync(path.join(d, 'package.json'), JSON.stringify({ type: 'module', scripts: { test: 'lumina-missing-runner' } }));
+    execFileSync('git', ['-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-qam', 'runner'], { cwd: d });
+    const t = run(d, ['export const add = (a, b) => a + b; // v2\n']);
+    t.input.write('make add faster\n');
+    await until(() => /Self-Healing: not applied/.test(t.text()));
+    expect(t.text()).toMatch(/— missing dependency/);
+    expect(t.text()).toMatch(/Full test suite: ENVIRONMENT_FAILURE \(missing dependency\)/);
+    expect(turns(t.c)).toHaveLength(1);
+    t.input.end(); await t.done;
+  }, 30000);
+  it('repairs go through the normal approval flow (manual answer required) and Ctrl-C cancels the loop', async () => {
+    const d = repo();
+    const t = run(d, ['export const add = (a, b) => a - b;\n', 'export const add = (a, b) => a + b; // fixed\n'], {}, true);
+    t.input.write('make add faster\n');
+    await until(() => /Approval Required/.test(t.text()));
+    expect(t.text()).toContain('node scripts/fixer.js'); // not auto-approved: unknown command, even in auto mode
+    t.input.write('n\n');
+    await until(() => /Repair successful/.test(t.text()));
+    expect(t.decisions).toEqual([{ decision: 'decline' }]);
+    t.input.end(); await t.done;
+    const d2 = repo();
+    const u = run(d2, ['export const add = (a, b) => a - b;\n', 'export const add = (a, b) => a * b;\n'], {}, true);
+    u.input.write('make add faster\n');
+    await until(() => /Approval Required/.test(u.text()));
+    u.input.write('\x03');
+    await until(() => /self-healing cancelled|Cancelled/.test(u.text()));
+    expect(turns(u.c)).toHaveLength(2);
+    expect(u.text()).not.toMatch(/Attempt 2\/2/);
+    u.input.end(); await u.done;
+  }, 60000);
+});
+
+describe('/memory and project memory in turns', () => {
+  const repo = () => {
+    const d = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'lum-tmem-')));
+    fs.mkdirSync(path.join(d, 'src', 'base'), { recursive: true });
+    fs.writeFileSync(path.join(d, 'src', 'base', 'baseCategory.ts'), 'export class BaseCategory {}\n');
+    execFileSync('git', ['init', '-q'], { cwd: d });
+    execFileSync('git', ['add', '-A'], { cwd: d });
+    execFileSync('git', ['-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-qm', `init ${d}`], { cwd: d });
+    return d;
+  };
+  const session = (d: string) => {
+    const input = new PassThrough();
+    const output = Object.assign(new PassThrough(), { columns: 140, isTTY: false }) as unknown as NodeJS.WriteStream;
+    let text = '';
+    output.on('data', (x) => { text += x.toString(); });
+    const c = new FakeClient();
+    return { c, input, text: () => text, done: runTui(c, d, { input, output }, { router: new TurnRouter(LEGACY, '/nonexistent', CAT) }) };
+  };
+  const wait = (ms = 300) => new Promise((r) => setTimeout(r, ms));
+  const sent = (c: FakeClient) => c.requests.filter((r) => r.method === 'turn/start').map((r) => r.params.input[0].text as string);
+
+  it('a stated decision is remembered and sent in a later session only when relevant; /memory list, inspect, forget (confirmed)', async () => {
+    const d = repo();
+    const a = session(d);
+    a.input.write('Remember that HEMS and regular Base use the shared BaseCategory model.\n'); await wait();
+    const id = /remembered decision (mem_[0-9a-f]{8})/.exec(a.text())?.[1];
+    expect(id).toBeTruthy();
+    a.input.end(); await a.done;
+
+    const b = session(d); // new session (restart)
+    b.input.write('Update the HEMS Base endpoint.\n'); await wait();
+    expect(sent(b.c)[0]).toMatch(/\[Lumina project memory: [^\n]*\]\n- \(decision\) HEMS and regular Base use the shared BaseCategory model/);
+    expect(b.text()).toContain('project memory: 1 note');
+    b.input.write('fix the login button colour\n'); await wait();
+    expect(sent(b.c)[1]).not.toContain('Lumina project memory');
+    b.input.write('/memory\n'); await wait(150);
+    expect(b.text()).toMatch(/Project memory · \d+ entr(y|ies) · git-[0-9a-f]{16}/);
+    b.input.write('/memory list\n'); await wait(150);
+    expect(b.text()).toContain(`${id}  decision     verified   HEMS and regular Base`);
+    b.input.write(`/memory inspect ${id}\n`); await wait(150);
+    expect(b.text()).toMatch(new RegExp(`${id} · decision · verified · source: user`));
+    b.input.write(`/memory forget ${id}\n`); await wait(150);
+    expect(b.text()).toContain('Forget this memory?');
+    b.input.write('n\n'); await wait(150);
+    expect(b.text()).toContain('memory kept');
+    b.input.write(`/memory forget ${id}\n`); await wait(150);
+    b.input.write('y\n'); await wait(150);
+    expect(b.text()).toContain(`forgot ${id}`);
+    b.input.write('/memory refresh\n'); await wait(500);
+    expect(b.text()).toMatch(/memory refreshed: repository notes re-derived/);
+    b.input.write('/memory add the password is hunter2hunter2\n'); await wait(150);
+    expect(b.text()).toContain('not stored: it looks like it contains a secret');
+    b.input.end(); await b.done;
+  }, 20000);
+});
+
+describe('/why and /diagnostics', () => {
+  const session = (d: string, c = new FakeClient()) => {
+    const input = new PassThrough();
+    const output = Object.assign(new PassThrough(), { columns: 140, isTTY: false }) as unknown as NodeJS.WriteStream;
+    let text = '';
+    output.on('data', (x) => { text += x.toString(); });
+    return { c, input, text: () => text, done: runTui(c, d, { input, output }, { router: new TurnRouter(LEGACY, '/nonexistent', CAT) }) };
+  };
+  const repo = () => { const d = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'lum-tdiag-'))); execFileSync('git', ['init', '-q'], { cwd: d }); return d; };
+  const wait = (ms = 300) => new Promise((r) => setTimeout(r, ms));
+
+  it('explains the recorded routing, shows execution diagnostics with provider tokens, and survives a restart', async () => {
+    const d = repo();
+    const c = new FakeClient();
+    c.onTurn = async (threadId) => {
+      c.emit('item/completed', { threadId, item: { type: 'commandExecution', command: 'rg -n auth src', exitCode: 1, status: 'failed', commandActions: [{ type: 'search' }] } });
+      c.emit('thread/tokenUsage/updated', { threadId, tokenUsage: { total: { totalTokens: 126200, inputTokens: 125000, cachedInputTokens: 110000, outputTokens: 1200 }, last: { totalTokens: 126200 }, modelContextWindow: 250000 } });
+      c.emit('turn/completed', { threadId, turn: { status: 'completed', error: null } });
+    };
+    const a = session(d, c);
+    a.input.write('/why\n'); await wait(100);
+    expect(a.text()).toContain('No request has been routed in this session yet.');
+    a.input.write('Update the authentication middleware to check token expiry\n'); await wait();
+    a.input.write('/why\n'); await wait(100);
+    expect(a.text()).toMatch(/Routing Decision\n\nTask: critical task \(high risk\)\nClassification: critical/);
+    expect(a.text()).toMatch(/Model: GPT-6 \w+\nReasoning: \w+ — security-sensitive implementation\nSelected by: automatic routing\n\nReasons:\n- modifies security\/payment\/data-integrity logic/);
+    a.input.write('/diagnostics\n'); await wait(100);
+    const out = a.text();
+    expect(out).toMatch(/Execution Diagnostics\n\nRequest: critical task \(high risk\) · req_\w+\nStatus: Completed\nDuration: \d+(ms|s)/);
+    expect(out).toContain('Input tokens: 125,000 · Cached: 110,000 · Output: 1,200 (provider-reported)');
+    expect(out).toContain('Commands: 1 (1 non-zero exit)'); // rg exit 1 is recorded, not a failure of the request
+    expect(out).not.toContain('Failure:');
+    const stored = fs.readdirSync(path.join(process.env.SMART_CODEX_HOME!, 'diagnostics')).map((f) => fs.readFileSync(path.join(process.env.SMART_CODEX_HOME!, 'diagnostics', f), 'utf8')).join('');
+    expect(stored).toContain('critical task (high risk)');
+    expect(stored).not.toMatch(/token expiry|authentication middleware/); // prompts are not stored (analytics.store_prompts is off)
+    a.input.end(); await a.done;
+
+    const b = session(d); // restart
+    b.input.write('/diagnostics\n'); await wait(150);
+    expect(b.text()).toContain('Input tokens: 125,000 · Cached: 110,000');
+    b.input.write('/diagnostics history\n'); await wait(150);
+    expect(b.text()).toMatch(/1\. req_\w+ .* completed +GPT-6 \w+ {2}critical task \(high risk\)/);
+    b.input.write('/diagnostics 1\n'); await wait(150);
+    expect(b.text()).toMatch(/Trace \(\d+ events\):[\s\S]*request_received[\s\S]*task_classified[\s\S]*model_selected[\s\S]*tool_executed tool=rg[\s\S]*execution_completed/);
+    b.input.end(); await b.done;
+  }, 20000);
+  it('a failed request prints an actionable diagnosis', async () => {
+    const d = repo();
+    const c = new FakeClient();
+    c.onTurn = async (threadId) => { c.emit('turn/completed', { threadId, turn: { status: 'failed', error: { message: 'The model gpt-6-luna is not supported when using Codex with a ChatGPT account' } } }); };
+    const a = session(d, c);
+    a.input.write('rename the helper\n'); await wait();
+    expect(a.text()).toMatch(/Diagnostics: model unavailable failure in Execute request\n {2}→ Pick another model with \/model/);
+    a.input.write('/diagnostics\n'); await wait(100);
+    expect(a.text()).toMatch(/Failure:\n {2}Category: model unavailable\n {2}Failed operation: Execute request\n {2}Error: The model gpt-6-luna is not supported/);
+    a.input.end(); await a.done;
+  }, 20000);
+});
+
+describe('/graph', () => {
+  it('shows dependencies and dependents, updates incrementally after an edit', async () => {
+    const d = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'lum-tgraph-')));
+    execFileSync('git', ['init', '-q'], { cwd: d });
+    const w = (f: string, c: string) => { fs.mkdirSync(path.dirname(path.join(d, f)), { recursive: true }); fs.writeFileSync(path.join(d, f), c); };
+    w('src/repo.ts', 'export class OrderRepository {}\n');
+    w('src/service.ts', "import { OrderRepository } from './repo';\nexport class OrderService { r = new OrderRepository(); }\n");
+    w('src/handler.ts', "import { OrderService } from './service';\nexport function OrderHandler() { return new OrderService(); }\n");
+    const input = new PassThrough();
+    const output = Object.assign(new PassThrough(), { columns: 140, isTTY: false }) as unknown as NodeJS.WriteStream;
+    let text = '';
+    output.on('data', (x) => { text += x.toString(); });
+    const done = runTui(new FakeClient(), d, { input, output }, { router: new TurnRouter(LEGACY, '/nonexistent', CAT) });
+    const wait = (ms = 400) => new Promise((r) => setTimeout(r, ms));
+    input.write('/graph\n'); await wait(100);
+    expect(text).toContain('usage: /graph <file-or-symbol>');
+    input.write('/graph OrderService\n'); await wait();
+    expect(text).toContain('OrderService  (class, exported · src/service.ts:2)\n├── Depends on\n│   └── OrderRepository  src/repo.ts  (L2)\n└── Used by\n    └── OrderHandler  src/handler.ts:2  (imports OrderService (L1))');
+    expect(text).toMatch(/3 source files · 3 parsed, 0 unchanged/);
+    w('src/controller.ts', "import { OrderService } from './service';\nexport class OrderController { s = new OrderService(); }\n");
+    input.write('/graph src/service.ts\n'); await wait();
+    expect(text).toMatch(/Used by\n│ {3}├── src\/controller\.ts {2}\(static, L1\)\n│ {3}└── src\/handler\.ts {2}\(static, L1\)/);
+    expect(text).toMatch(/4 source files · 1 parsed, 3 unchanged/);
+    input.end(); await done;
+  }, 20000);
+});
+
+describe('/impact', () => {
+  it('predicts for a symbol, analyses actual uncommitted changes without arguments, and never modifies files', async () => {
+    const d = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'lum-timp-')));
+    const w = (f: string, c: string) => { fs.mkdirSync(path.dirname(path.join(d, f)), { recursive: true }); fs.writeFileSync(path.join(d, f), c); };
+    w('src/service.ts', 'export function total(a: number): number { return a; }\n');
+    w('src/handler.ts', "import { total } from './service';\nexport function Handler() { return total(1); }\n");
+    execFileSync('git', ['init', '-q'], { cwd: d });
+    execFileSync('git', ['add', '-A'], { cwd: d });
+    execFileSync('git', ['-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-qm', 'x'], { cwd: d });
+    const input = new PassThrough();
+    const output = Object.assign(new PassThrough(), { columns: 140, isTTY: false }) as unknown as NodeJS.WriteStream;
+    let text = '';
+    output.on('data', (x) => { text += x.toString(); });
+    const done = runTui(new FakeClient(), d, { input, output }, { router: new TurnRouter(LEGACY, '/nonexistent', CAT) });
+    const wait = (ms = 400) => new Promise((r) => setTimeout(r, ms));
+    input.write('/impact\n'); await wait();
+    expect(text).toContain('No uncommitted changes.');
+    input.write('/impact total\n'); await wait();
+    expect(text).toMatch(/Target: total {2}\(src\/service\.ts\)\n\nRisk: Low[\s\S]*Confirmed dependents \(graph edges\): 1\n {2}- Handler · src\/handler\.ts — imports total \(L1\) at src\/handler\.ts:2/);
+    w('src/service.ts', 'export function total(a: number, b: number): number { return a + b; }\n');
+    const before = fs.readFileSync(path.join(d, 'src/service.ts'), 'utf8');
+    input.write('/impact\n'); await wait();
+    expect(text).toMatch(/Target: src\/service\.ts[\s\S]*Risk: High\n {2}- 1 possibly breaking change to symbols still used elsewhere \(total: signature changed\)/);
+    expect(fs.readFileSync(path.join(d, 'src/service.ts'), 'utf8')).toBe(before);
+    input.end(); await done;
+  }, 20000);
+});
+
+describe('/api-check', () => {
+  it('runs a scoped static contract check and never changes files', async () => {
+    const d = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'lum-tapi-')));
+    execFileSync('git', ['init', '-q'], { cwd: d });
+    const w = (f: string, c: string) => { fs.mkdirSync(path.dirname(path.join(d, f)), { recursive: true }); fs.writeFileSync(path.join(d, f), c); };
+    w('openapi.json', JSON.stringify({ openapi: '3.0.0', paths: { '/api/v1/orders': { get: { responses: { 200: { content: { 'application/json': { schema: { type: 'array', items: { type: 'object', required: ['order_uuid'], properties: { order_uuid: { type: 'string' } } } } } } } } } }, '/api/v1/users': { get: { responses: { 200: { description: 'x' } } } } } }));
+    w('src/orders.ts', "interface Order { order_id: number }\nexport async function orders(): Promise<Order[]> { const r = await fetch('/api/v1/orders'); return r.json(); }\n");
+    const before = fs.readFileSync(path.join(d, 'src/orders.ts'), 'utf8');
+    const input = new PassThrough();
+    const output = Object.assign(new PassThrough(), { columns: 140, isTTY: false }) as unknown as NodeJS.WriteStream;
+    let text = '';
+    output.on('data', (x) => { text += x.toString(); });
+    const done = runTui(new FakeClient(), d, { input, output }, { router: new TurnRouter(LEGACY, '/nonexistent', CAT) });
+    input.write('/api-check orders\n'); await new Promise((r) => setTimeout(r, 600));
+    expect(text).toMatch(/API Contract Check · scope: orders · 1 endpoint \(openapi 1\) · 1 frontend call/);
+    expect(text).toContain('Endpoint: GET /api/v1/orders\n  Backend:  order_uuid: string\n  Frontend: order_id: number\n  Status: ? Potential contract mismatch');
+    expect(fs.readFileSync(path.join(d, 'src/orders.ts'), 'utf8')).toBe(before);
+    input.end(); await done;
+  });
+});
+
+describe('/workspace', () => {
+  it('shows linked repositories, cross-repo impact, and sends only relevant cross-repo facts with a turn', async () => {
+    const base = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'lum-tws-')));
+    const w = (f: string, c: string) => { fs.mkdirSync(path.dirname(path.join(base, f)), { recursive: true }); fs.writeFileSync(path.join(base, f), c); };
+    for (const r of ['backend', 'frontend']) { fs.mkdirSync(path.join(base, r)); execFileSync('git', ['init', '-q'], { cwd: path.join(base, r) }); }
+    w('backend/openapi.json', JSON.stringify({ openapi: '3.0.0', paths: { '/api/v1/orders': { get: { responses: { 200: { description: 'ok' } } } } } }));
+    w('frontend/src/orders.ts', "export const list = () => fetch('/api/v1/orders');\n");
+    const input = new PassThrough();
+    const output = Object.assign(new PassThrough(), { columns: 140, isTTY: false }) as unknown as NodeJS.WriteStream;
+    let text = '';
+    output.on('data', (x) => { text += x.toString(); });
+    const c = new FakeClient();
+    const router = new TurnRouter(ConfigSchema.parse({ stages: { enabled: false }, workspace: { repositories: ['../frontend'] } }), '/nonexistent', CAT);
+    const done = runTui(c, path.join(base, 'backend'), { input, output }, { router });
+    const wait = (ms = 500) => new Promise((r) => setTimeout(r, ms));
+    input.write('/workspace\n'); await wait();
+    expect(text).toMatch(/Workspace\n\nRepositories:\n {2}● backend \(current\)[\s\S]*● frontend[\s\S]*· read-only/);
+    expect(text).toContain('Verified relationships: 1\n  - frontend → backend (api): 1 API call to backend');
+    input.write('/workspace impact GET /api/v1/orders\n'); await wait();
+    expect(text).toContain('Consumers:\n  - frontend/src/orders.ts:1');
+    input.write('speed up the orders endpoint\n'); await wait();
+    const sent = c.requests.filter((r) => r.method === 'turn/start').map((r) => r.params.input[0].text as string);
+    expect(sent[0]).toMatch(/\[Lumina workspace: [^\n]*read-only[^\n]*\]\n- GET \/api\/v1\/orders \(served here, openapi\.json\) is called by frontend\/src\/orders\.ts:1/);
+    input.write('rename a variable\n'); await wait();
+    const sent2 = c.requests.filter((r) => r.method === 'turn/start').map((r) => r.params.input[0].text as string);
+    expect(sent2[1]).not.toContain('Lumina workspace');
+    input.end(); await done;
+  });
+});
+
+describe('/feedback', () => {
+  it('records each request (no prompt text), shows per-category outcomes, toggles influence and resets after confirmation', async () => {
+    const input = new PassThrough();
+    const output = Object.assign(new PassThrough(), { columns: 140, isTTY: false }) as unknown as NodeJS.WriteStream;
+    let text = '';
+    output.on('data', (x) => { text += x.toString(); });
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), 'lum-tfb-'));
+    const prev = process.env.SMART_CODEX_HOME;
+    process.env.SMART_CODEX_HOME = home;
+    try {
+      const done = runTui(new FakeClient(), '/w', { input, output }, { router: new TurnRouter(LEGACY, '/nonexistent', CAT) });
+      const wait = (ms = 300) => new Promise((r) => setTimeout(r, ms));
+      input.write('add a CRUD endpoint for products with validation\n'); await wait();
+      input.write('/feedback\n'); await wait(120);
+      expect(text).toMatch(/Routing feedback · 1 outcomes · influence on[\s\S]*normal · standard implementation\n {2}gpt-6-luna\/medium: 0 verified success, 0 failed, 1 unverified/);
+      expect(fs.readFileSync(path.join(home, 'feedback.jsonl'), 'utf8')).not.toContain('products');
+      input.write('/feedback off\n'); await wait(80);
+      expect(text).toContain('routing feedback influence: off for this session');
+      input.write('/feedback reset\n'); await wait(80);
+      input.write('y\n'); await wait(80);
+      expect(text).toContain('routing feedback reset (1 outcomes deleted)');
+      input.end(); await done;
+    } finally { process.env.SMART_CODEX_HOME = prev; }
+  });
+});
+
+describe('/models stats', () => {
+  it('reports from the local history, filters, and explains usage', async () => {
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), 'lum-tms-'));
+    const prev = process.env.SMART_CODEX_HOME;
+    process.env.SMART_CODEX_HOME = home;
+    try {
+      const line = (o: Record<string, unknown>) => JSON.stringify({ at: 1, category: 'normal · standard implementation', tier: 'normal', complexity: 5, risk: 'low', model: 'gpt-6-luna', effort: 'medium', source: 'automatic routing', ms: 28000, input: 1000, cached: 800, output: 50, outcome: 'verified-success', repairs: 0, escalations: 0, switches: 0, ...o });
+      fs.writeFileSync(path.join(home, 'feedback.jsonl'), `${Array.from({ length: 6 }, () => line({})).join('\n')}\n${line({ model: 'gpt-6-sol', ms: 45000 })}\n`);
+      const input = new PassThrough();
+      const output = Object.assign(new PassThrough(), { columns: 140, isTTY: false }) as unknown as NodeJS.WriteStream;
+      let text = '';
+      output.on('data', (x) => { text += x.toString(); });
+      const done = runTui(new FakeClient(), '/w', { input, output }, { router: new TurnRouter(LEGACY, '/nonexistent', CAT) });
+      const wait = (ms = 150) => new Promise((r) => setTimeout(r, ms));
+      input.write('/models stats\n'); await wait();
+      expect(text).toMatch(/Model Performance · 7 executions \(local history\)\n\nGPT-6 Luna:\n {2}Executions: 6 \(6 verified success, 0 failed, 0 unknown — not verified\)\n {2}Verified success: 100%\n {2}Median duration: 28s/);
+      expect(text).toMatch(/GPT-6 Sol:\n {2}Executions: 1[\s\S]*Verified success: insufficient samples/);
+      input.write('/models stats high\n'); await wait();
+      expect(text).toContain('No recorded executions match this filter.');
+      input.write('/models\n'); await wait();
+      expect(text).toContain('usage: /models stats');
+      input.end(); await done;
+    } finally { process.env.SMART_CODEX_HOME = prev; }
+  });
+});
+
+describe('context compaction at turn boundaries', () => {
+  it('long conversation: compacts once before a turn (never during one), restates critical context, shows it in /context; short ones never compact', async () => {
+    const c = new FakeClient();
+    let n = 0;
+    c.onTurn = async (threadId) => {
+      n++;
+      const used = n <= 3 ? 20_000 : 200_000; // grows large after a few turns
+      c.emit('thread/tokenUsage/updated', { threadId, tokenUsage: { total: { totalTokens: n * 1000, inputTokens: n * 900, cachedInputTokens: 0, outputTokens: n * 100 }, last: { totalTokens: used }, modelContextWindow: 250_000 } });
+      c.emit('turn/completed', { threadId, turn: { status: 'completed', error: null } });
+    };
+    const input = new PassThrough();
+    const output = Object.assign(new PassThrough(), { columns: 160, isTTY: false }) as unknown as NodeJS.WriteStream;
+    let text = '';
+    output.on('data', (x) => { text += x.toString(); });
+    const done = runTui(c, '/w', { input, output }, { router: new TurnRouter(LEGACY, '/nonexistent', CAT), approvalMode: 'smart' });
+    const settle = async (k: number) => { for (let i = 0; i < 250 && (text.match(/Completed in/g) ?? []).length < k; i++) await new Promise((r) => setTimeout(r, 20)); await new Promise((r) => setTimeout(r, 40)); };
+    const order = () => c.requests.filter((r) => r.method === 'turn/start' || r.method === 'thread/compact/start').map((r) => r.method === 'turn/start' ? 'turn' : 'compact');
+    for (let i = 1; i <= 6; i++) { input.write(`explain module ${i}\n`); await settle(i); }
+    expect(order()).toEqual(['turn', 'turn', 'turn', 'turn', 'turn', 'turn']); // fewer than 6 finished turns, then small context: no compaction
+    input.write('explain module 7\n'); await settle(7);
+    expect(order()).toEqual(['turn', 'turn', 'turn', 'turn', 'turn', 'turn', 'compact', 'turn']); // compacted at the boundary, then the turn ran
+    const sent = c.requests.filter((r) => r.method === 'turn/start').map((r) => r.params.input[0].text as string);
+    expect(sent[6]).toMatch(/^\[Lumina preserved context after compaction — restated so it does not depend on the summary:\n- Approvals: smart mode\]\n\nexplain module 7$/);
+    expect(text).toMatch(/conversation compacted \(context 80% of the window after 6 turns; \d+ms\) · critical context restated/);
+    input.write('explain module 8\n'); await settle(8);
+    expect(order().filter((x) => x === 'compact')).toHaveLength(1); // no repeated compaction right after one
+    input.write('/context\n'); await new Promise((r) => setTimeout(r, 120));
+    expect(text).toMatch(/Compaction: 1 done · 2 turns since the last one\n {2}✓ turn boundary · 200,000 tokens \(80%\) → 200,000 at the next turn \(includes its new input\) · \d+ms · compaction cost: not reported by Codex/);
+    expect(text).toContain('next turn: short conversation (2 turns since the last reset/compaction)');
+    input.end(); await done;
+  }, 30000);
+});
+
+describe('budget-aware execution', () => {
+  it('stops at a boundary when the token threshold is reached, keeps progress, explains; /budget shows usage; /continue resumes through the normal approval flow', async () => {
+    const c = new FakeClient();
+    let n = 0;
+    const decisions: unknown[] = [];
+    c.onTurn = async (threadId) => {
+      n++;
+      if (n === 2) decisions.push(await c.serverHandler!('item/commandExecution/requestApproval', { threadId, command: 'npm install left-pad', cwd: '/w' }));
+      c.emit('item/completed', { threadId, item: { type: 'commandExecution', command: 'npm test', exitCode: n === 1 ? 1 : 0, status: n === 1 ? 'failed' : 'completed' } });
+      c.emit('thread/tokenUsage/updated', { threadId, tokenUsage: { total: { totalTokens: n * 5100, inputTokens: n * 5000, cachedInputTokens: n * 1000, outputTokens: n * 100 }, last: { totalTokens: 5100 }, modelContextWindow: 250000 } });
+      c.emit('turn/completed', { threadId, turn: { status: 'completed', error: null } });
+    };
+    const input = new PassThrough();
+    const output = Object.assign(new PassThrough(), { columns: 160, isTTY: false }) as unknown as NodeJS.WriteStream;
+    let text = '';
+    output.on('data', (x) => { text += x.toString(); });
+    const router = new TurnRouter(ConfigSchema.parse({ budget: { max_input_tokens: 4000 }, feedback: { influence: false } }), '/nonexistent', CAT);
+    const done = runTui(c, '/w', { input, output }, { router });
+    const until = async (f: () => boolean) => { for (let i = 0; i < 250 && !f(); i++) await new Promise((r) => setTimeout(r, 20)); };
+    input.write('add a CRUD endpoint for products with validation\n');
+    await until(() => text.includes('Stopped at an execution boundary'));
+    expect(c.requests.filter((r) => r.method === 'turn/start')).toHaveLength(1); // no fix stage over budget
+    expect(text).toMatch(/⏸ Stopped at an execution boundary: budget exhausted \(input token threshold: 5,000 of 4,000 \(provider-reported\)\)\.\n {2}Not finished: fix the failing tests\n {2}Progress so far is kept/);
+    expect(text).not.toMatch(/✓ Completed in/); // not presented as complete
+    expect(text).toContain('Diagnostics: budget failure in');
+    input.write('/budget\n'); await until(() => text.includes('Last request:'));
+    await new Promise((r) => setTimeout(r, 50)); // let the command finish
+    expect(text).toMatch(/Budget limits \(per request\):[\s\S]*Input tokens: 4,000[\s\S]*Last request:\n {2}Stages: 1 of 3[\s\S]*Tokens \(provider-reported\): input 5,000 of 4,000 \(cached 1,000\) · output 100/);
+    input.write('/continue\n');
+    await until(() => text.includes('[y] Approve'));
+    const sent = c.requests.filter((r) => r.method === 'turn/start').map((r) => r.params.input[0].text as string);
+    expect(sent[1]).toMatch(/Continue the previous request: "add a CRUD endpoint for products with validation"\. It was stopped at an execution boundary \(input token threshold[^)]*\)\)\. Still to do: fix the failing tests\./);
+    input.write('n\n'); await until(() => decisions.length > 0);
+    expect(decisions).toEqual([{ decision: 'decline' }]); // approvals still apply to continued work
+    input.write('/continue\n'); await until(() => text.includes('Nothing to continue'));
+    input.end(); await done;
+  }, 30000);
+});
+
+describe('/benchmark', () => {
+  it('defaults to mock (no model calls); real needs explicit confirmation and never touches this session', async () => {
+    const c = new FakeClient();
+    let sessions = 0;
+    const input = new PassThrough();
+    const output = Object.assign(new PassThrough(), { columns: 160, isTTY: false }) as unknown as NodeJS.WriteStream;
+    let text = '';
+    output.on('data', (x) => { text += x.toString(); });
+    const done = runTui(c, '/w', { input, output }, { router: new TurnRouter(LEGACY, '/nonexistent', CAT), benchSession: async () => { sessions++; throw new Error('not in this test'); } });
+    const until = async (f: () => boolean) => { for (let i = 0; i < 250 && !f(); i++) await new Promise((r) => setTimeout(r, 20)); await new Promise((r) => setTimeout(r, 30)); };
+    input.write('/benchmark\n'); await until(() => text.includes('Expectations:'));
+    expect(text).toMatch(/Routing Benchmark · MOCK \(no model calls; deterministic expectations\) · 13 scenarios/);
+    expect(c.requests.filter((r) => r.method === 'turn/start')).toHaveLength(0);
+    input.write('/benchmark mock nope\n'); await until(() => text.includes('unknown scenario nope'));
+    input.write('/benchmark real 2 rename\n'); await until(() => text.includes('Run REAL benchmarks?'));
+    expect(text).toContain('Simple rename · 2 samples each = 2 Codex executions in temporary repositories.');
+    input.write('n\n'); await until(() => text.includes('real benchmark cancelled'));
+    expect(sessions).toBe(0);
+    input.end(); await done;
   });
 });

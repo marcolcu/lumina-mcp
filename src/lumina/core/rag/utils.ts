@@ -22,7 +22,7 @@ export function isIgnoredPath(relativePath: string): boolean {
     || /^\.lumina\/rag(\/|$)/.test(path)
     || /(^|\/)(\.env(?:\.[^/]+)?|credentials(?:\.[^/]+)?)(\/|$)/i.test(path)
     || /\.(pem|key)$/i.test(path)
-    || /(^|\/)(generated|artifacts)(\/|$)/i.test(path);
+    || /(^|\/)(\.next|generated|artifacts)(\/|$)/i.test(path);
 }
 
 export function splitLines(content: string): string[] {

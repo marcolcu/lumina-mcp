@@ -21,11 +21,11 @@ describe('CommandPalette matching', () => {
   it('prefix, case-insensitive, exact before prefix before substring/description/fuzzy', () => {
     expect(names(at('/res'))).toEqual(['/resume']);
     expect(names(at('/MOD'))[0]).toBe('/model');
-    expect(names(at('/re'))).toEqual(['/resume', '/reasoning']); // several prefix matches, registry order
+    expect(names(at('/re'))).toEqual(['/resume', '/reasoning', '/repo']); // several prefix matches, registry order
     expect(names(at('/res'))).toEqual(['/resume']); // fuzzy "r-e-s" in /reasoning is dropped once a prefix matches
     expect(names(at('/new'))[0]).toBe('/new'); // exact first
     expect(names(at('/aprv'))).toEqual(['/approval']); // fuzzy subsequence
-    expect(names(at('/token'))).toEqual(['/usage']); // description match
+    expect(names(at('/token'))).toEqual(['/context', '/usage', '/models']); // description matches
   });
   it('no matches for unknown input; only opens for a command token at the start of a single line', () => {
     expect(names(at('/zzz'))).toEqual([]);

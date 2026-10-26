@@ -31,10 +31,10 @@ function listFiles(repo: string): string[] | null {
 }
 
 /** Reads at most `bytes` from a regular file that resolves inside `root`. Never follows symlinks out of the repo. */
-function readHead(root: string, rel: string, bytes: number): string {
+export function readHead(root: string, rel: string, bytes: number): string {
   try {
     const full = path.join(root, rel);
-    if (fs.lstatSync(full).isSymbolicLink() || !fs.realpathSync(full).startsWith(root)) return '';
+    if (fs.lstatSync(full).isSymbolicLink() || !fs.realpathSync(full).startsWith(root + path.sep)) return '';
     const fd = fs.openSync(full, 'r');
     try {
       const buf = Buffer.alloc(bytes);
@@ -43,7 +43,7 @@ function readHead(root: string, rel: string, bytes: number): string {
   } catch { return ''; }
 }
 
-function resolveImports(rel: string, head: string, known: Set<string>): string[] {
+export function resolveImports(rel: string, head: string, known: Set<string>): string[] {
   const out: string[] = [];
   for (const m of head.matchAll(IMPORT)) {
     const base = path.posix.join(path.posix.dirname(rel), m[1].replace(/\.(m|c)?js$/, ''));

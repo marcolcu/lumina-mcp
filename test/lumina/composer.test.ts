@@ -38,7 +38,8 @@ describe('KeyParser', () => {
   it('splits escape sequences arriving in pieces and ignores lone Escape / unknown sequences', () => {
     expect(names(parse('\x1b[', 'A'))).toEqual(['up']);
     expect(names(parse('\x1b'))).toEqual(['escape']); // lone Escape key
-    expect(names(parse('\x1b[5~'))).toEqual([]);
+    expect(names(parse('\x1b[5~', '\x1b[6~'))).toEqual(['page-up', 'page-down']);
+    expect(names(parse('\x1b[2~'))).toEqual([]); // Insert: ignored
   });
   it('line mode (non-TTY): every line submits, no escape handling', () => {
     const p = new KeyParser(true);

@@ -33,7 +33,7 @@ export class Screen {
   private openMd = false; // the open line is assistant Markdown
   private openPrefix = 0;
   private readonly md?: MarkdownLines;
-  private status?: string;
+  private status?: string[];
   private overlay: string[] = [];
   private input: InputView = { rows: [''], cursor: { row: 0, col: 0 } };
   private footer: string[] = [];
@@ -107,7 +107,11 @@ export class Screen {
   }
 
   // ---- live region parts -------------------------------------------------------------------------
-  setStatus(line: string | undefined): void { if (line !== this.status) { this.status = line; this.request(); } }
+  /** The activity rows (spinner line plus an optional detail line); unchanged content is never repainted. */
+  setStatus(lines: string | string[] | undefined): void {
+    const next = lines === undefined ? undefined : ([] as string[]).concat(lines);
+    if (next?.join('\n') !== this.status?.join('\n')) { this.status = next; this.request(); }
+  }
   setInput(view: InputView): void { this.input = view; this.request(); }
   /** A menu drawn between the status row and the input (e.g. the skills picker). */
   setOverlay(lines: string[] | undefined): void { this.overlay = lines ?? []; this.request(); }
@@ -132,7 +136,7 @@ export class Screen {
       for (let i = 0; i < this.partial.length || i === 0; i += this.width) parts.push(this.partial.slice(i, i + this.width));
       rows.push(...parts.slice(-3)); // preview of the line being streamed: last 3 rows at most
     }
-    if (this.status !== undefined) rows.push(this.status);
+    if (this.status) rows.push(...this.status);
     rows.push(...this.overlay);
     rows.push(this.rule());
     const start = rows.length;

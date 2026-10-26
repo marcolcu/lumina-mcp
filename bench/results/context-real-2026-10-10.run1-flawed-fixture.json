@@ -1,0 +1,239 @@
+{
+  "date": "2026-10-10T15:00:14.644Z",
+  "runs": [
+    {
+      "scenario": 1,
+      "variant": "A",
+      "usage": {
+        "totalTokens": 146776,
+        "inputTokens": 146219,
+        "cachedInputTokens": 121088,
+        "outputTokens": 557
+      },
+      "ms": 18821,
+      "retrievalMs": 0,
+      "hintFiles": [],
+      "relevantFound": 0,
+      "inspected": [
+        "src/lib/money.js",
+        "src/orders/orderHandler.js",
+        "src/orders/orderService.js"
+      ],
+      "unnecessary": [
+        "src/lib/money.js",
+        "src/orders/orderHandler.js"
+      ],
+      "commands": 5,
+      "status": "completed",
+      "testsPass": false
+    },
+    {
+      "scenario": 1,
+      "variant": "B",
+      "usage": {
+        "totalTokens": 129010,
+        "inputTokens": 128465,
+        "cachedInputTokens": 114176,
+        "outputTokens": 545
+      },
+      "ms": 20163,
+      "retrievalMs": 38,
+      "hintFiles": [
+        "src/orders/orderService.js",
+        "src/orders/orderHandler.js",
+        "test/orders.test.js",
+        "src/lib/money.js",
+        "src/lib/http.js"
+      ],
+      "relevantFound": 1,
+      "inspected": [
+        "src/lib/money.js",
+        "src/orders/orderHandler.js",
+        "src/orders/orderService.js"
+      ],
+      "unnecessary": [
+        "src/lib/money.js",
+        "src/orders/orderHandler.js"
+      ],
+      "commands": 4,
+      "status": "completed",
+      "testsPass": false
+    },
+    {
+      "scenario": 2,
+      "variant": "A",
+      "usage": {
+        "totalTokens": 296181,
+        "inputTokens": 293459,
+        "cachedInputTokens": 263040,
+        "outputTokens": 2722
+      },
+      "ms": 55034,
+      "retrievalMs": 0,
+      "hintFiles": [],
+      "relevantFound": 0,
+      "inspected": [
+        "src/inventory/inventoryHandler.js",
+        "src/lib/http.js",
+        "src/lib/money.js",
+        "src/orders/orderHandler.js",
+        "src/orders/orderService.js",
+        "src/payments/paymentsHandler.js",
+        "src/products/productsHandler.js",
+        "src/products/productsService.js",
+        "src/reorder/reorderService.js"
+      ],
+      "unnecessary": [
+        "src/inventory/inventoryHandler.js",
+        "src/lib/http.js",
+        "src/lib/money.js",
+        "src/payments/paymentsHandler.js",
+        "src/products/productsHandler.js",
+        "src/products/productsService.js",
+        "src/reorder/reorderService.js"
+      ],
+      "commands": 15,
+      "status": "completed",
+      "testsPass": true
+    },
+    {
+      "scenario": 2,
+      "variant": "B",
+      "usage": {
+        "totalTokens": 295376,
+        "inputTokens": 292107,
+        "cachedInputTokens": 256128,
+        "outputTokens": 3269
+      },
+      "ms": 54870,
+      "retrievalMs": 30,
+      "hintFiles": [
+        "src/orders/orderService.js",
+        "src/orders/orderHandler.js",
+        "src/lib/http.js",
+        "test/orders.test.js"
+      ],
+      "relevantFound": 2,
+      "inspected": [
+        "src/cart/cartHandler.js",
+        "src/invoices/invoicesHandler.js",
+        "src/lib/http.js",
+        "src/orders/orderHandler.js",
+        "src/orders/orderService.js",
+        "src/products/productsHandler.js",
+        "src/reorder/reorderService.js"
+      ],
+      "unnecessary": [
+        "src/cart/cartHandler.js",
+        "src/invoices/invoicesHandler.js",
+        "src/lib/http.js",
+        "src/products/productsHandler.js",
+        "src/reorder/reorderService.js"
+      ],
+      "commands": 14,
+      "status": "completed",
+      "testsPass": true
+    },
+    {
+      "scenario": 3,
+      "variant": "A",
+      "usage": {
+        "totalTokens": 103643,
+        "inputTokens": 103146,
+        "cachedInputTokens": 86784,
+        "outputTokens": 497
+      },
+      "ms": 18054,
+      "retrievalMs": 0,
+      "hintFiles": [],
+      "relevantFound": 0,
+      "inspected": [
+        "src/cart/cartService.js",
+        "src/orders/orderService.js",
+        "src/reorder/reorderService.js"
+      ],
+      "unnecessary": [
+        "src/cart/cartService.js",
+        "src/orders/orderService.js"
+      ],
+      "commands": 4,
+      "status": "completed",
+      "testsPass": false
+    },
+    {
+      "scenario": 3,
+      "variant": "B",
+      "usage": {
+        "totalTokens": 107043,
+        "inputTokens": 106471,
+        "cachedInputTokens": 92928,
+        "outputTokens": 572
+      },
+      "ms": 16592,
+      "retrievalMs": 32,
+      "hintFiles": [
+        "src/reorder/reorderService.js",
+        "test/reorder.test.js"
+      ],
+      "relevantFound": 1,
+      "inspected": [
+        "src/orders/orderService.js",
+        "src/reorder/reorderService.js"
+      ],
+      "unnecessary": [
+        "src/orders/orderService.js"
+      ],
+      "commands": 5,
+      "status": "completed",
+      "testsPass": false
+    },
+    {
+      "scenario": 4,
+      "variant": "A",
+      "usage": {
+        "totalTokens": 151520,
+        "inputTokens": 150336,
+        "cachedInputTokens": 135424,
+        "outputTokens": 1184
+      },
+      "ms": 22798,
+      "retrievalMs": 0,
+      "hintFiles": [],
+      "relevantFound": 0,
+      "inspected": [
+        "src/lib/money.js",
+        "src/orders/orderService.js"
+      ],
+      "unnecessary": [
+        "src/orders/orderService.js"
+      ],
+      "commands": 5,
+      "status": "completed",
+      "testsPass": false
+    },
+    {
+      "scenario": 4,
+      "variant": "B",
+      "usage": {
+        "totalTokens": 109995,
+        "inputTokens": 109229,
+        "cachedInputTokens": 93952,
+        "outputTokens": 766
+      },
+      "ms": 17398,
+      "retrievalMs": 21,
+      "hintFiles": [],
+      "relevantFound": 0,
+      "inspected": [
+        "src/lib/money.js",
+        "src/orders/orderService.js"
+      ],
+      "unnecessary": [
+        "src/orders/orderService.js"
+      ],
+      "commands": 4,
+      "status": "completed",
+      "testsPass": false
+    }
+  ]
+}

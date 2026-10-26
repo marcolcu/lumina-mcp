@@ -7,6 +7,7 @@ import { Route, splitPrompt } from '../smart-codex/router.js';
 import { classifyFailure } from '../smart-codex/run.js';
 import { unwrap } from './approval/policy.js';
 import type { Selection, TokenBreakdown, TurnItem, TurnResult } from './tui/chat.js';
+import type { Benefit, Budget } from './budget.js';
 
 export type Tier = 'fast' | 'balanced' | 'advanced';
 export const TIER_ORDER: Tier[] = ['fast', 'balanced', 'advanced'];
@@ -54,6 +55,13 @@ export interface ExecutionPlan {
   adaptive: boolean;
 }
 
+const EFFORTS = ['low', 'medium', 'high', 'xhigh'];
+/** One reasoning step up (never below medium, never above `cap`); unsupported levels are clamped later by the catalog. */
+export function raiseEffort(effort: string, cap: 'high' | 'xhigh' = 'high'): string {
+  const i = Math.max(EFFORTS.indexOf(effort), 0);
+  return EFFORTS[Math.min(Math.max(i + 1, 1), EFFORTS.indexOf(cap))];
+}
+
 /** Starting tier from complexity and risk: risk raises the model, not the number of stages. */
 export function startTier(route: Route): Tier {
   if (route.risk === 'high' && route.base_complexity >= 8) return 'advanced';
@@ -91,7 +99,7 @@ export interface ExecutionContext {
   task: string; completed: string[]; current_stage: string; modified_files: string[]; known_issues: string[]; pending: string[]; constraints: string[];
 }
 
-const TEST_CMD = /\b(vitest|jest|mocha|pytest|phpunit|rspec|go test|cargo test|node --test|npm (run )?test|pnpm (run )?test|yarn test|bun test|make test)\b/;
+export const TEST_CMD = /\b(vitest|jest|mocha|pytest|phpunit|rspec|go test|cargo test|node --test|npm (run )?test|pnpm (run )?test|yarn test|bun test|make test)\b/;
 const STUCK = /\b(unable to|could not|cannot|can't) (fix|resolve|determine|figure out|make (it|the tests?) pass)\b|\bstill fail(s|ing)\b/i;
 
 /** Signals read from a finished stage. "Tests failing" uses only the last test run of the stage, not any non-zero exit. */
@@ -144,11 +152,15 @@ export interface StageDeps {
   hooks: StageHooks;
   log?: (e: RoutingLog) => void;
   requestId?: string;
+  /** Per-request budget: consulted before any additional stage or retry (at boundaries only). */
+  budget?: Budget;
 }
 
 export interface ExecutionResult {
   status: 'completed' | 'failed' | 'cancelled'; error?: string; stages: Stage[]; strategy: Strategy;
   switches: number; escalations: number; compactions: number; retries: number; usage: TokenBreakdown; usageReported: boolean; ms: number; models: string[];
+  /** Set when the budget stopped execution at a boundary: why, and what was left undone. */
+  stopped?: { reason: string; unfinished: string[] };
 }
 
 /**
@@ -168,6 +180,7 @@ export class StagedExecution {
   private retries = 0;
   private prevModel: string | null = null;
   private prevTier: Tier | null = null;
+  private prevEffort: string | undefined;
 
   constructor(private readonly task: string, readonly plan: ExecutionPlan, private readonly deps: StageDeps, private readonly first: Selection = {}, constraints: string[] = []) {
     this.stages = [...plan.stages];
@@ -222,6 +235,11 @@ export class StagedExecution {
     for (let i = 0; i < this.stages.length; i++) {
       const stage = this.stages[i];
       if (this.deps.cancelled()) { status = 'cancelled'; break; }
+      if (i > 0 && this.deps.budget) { // every stage after the first is additional work: check the budget at this boundary
+        const ok = this.deps.budget.allow('stage', this.benefit.get(stage.id) ?? 'high');
+        if (!ok.ok) { this.stopForBudget(ok.reason, i); status = 'failed'; failure = `stopped: budget exhausted (${ok.reason})`; break; }
+      }
+      if (this.deps.budget) this.deps.budget.stages++;
       stage.status = 'running';
       let tier = stage.tier;
       let effort = stage.effort;
@@ -256,10 +274,13 @@ export class StagedExecution {
           }
         }
         stage.model = sel.model;
+        stage.effort = sel.effort ?? stage.effort; // what was actually sent (after clamping to the model's levels)
+        this.prevEffort = stage.effort;
         stage.thread = isolated ? 'isolated' : 'shared';
         hooks.stageStart(stage, i, this.stages.length, sel, switched);
         this.log({ level: 'info', event: 'stage_started', stage_id: stage.id, stage_type: stage.type, previous_model: this.prevModel, selected_model: sel.model, routing_reason: stage.reason, escalation_level: stage.escalation, retry_count: stage.attempts - 1, context: stage.thread });
         const st = Date.now();
+        this.deps.budget?.beginTurn();
         let result: TurnResult;
         try {
           result = await this.withTimeout(this.deps.send(this.prompt(stage, i, isolated), { model: sel.model, effort: sel.effort }, { first: i === 0 && stage.attempts === 1, isolated }), lim.stage_timeout_ms);
@@ -267,6 +288,7 @@ export class StagedExecution {
           result = { status: 'failed', error: e instanceof Error ? e.message : String(e) };
         }
         stage.ms = (stage.ms ?? 0) + Date.now() - st;
+        this.deps.budget?.turn(result.usage);
         if (result.usage) {
           usageReported = true;
           stage.usage = add(stage.usage, result.usage);
@@ -286,8 +308,10 @@ export class StagedExecution {
             this.log({ level: 'warn', event: 'model_rejected', stage_id: stage.id, stage_type: stage.type, selected_model: sel.model, routing_reason: 'backend rejected model; falling back' });
             tier = 'fast'; this.retries++; continue;
           }
+          const retryOk = this.deps.budget ? this.deps.budget.allow('stage', 'high') : { ok: true as const };
+          if (!retryOk.ok && this.plan.adaptive && kind === 'coding') { this.stopForBudget(retryOk.reason, i + 1, [`retry ${stage.title}`]); stage.status = 'failed'; stage.outcome = (result.error ?? 'failed').slice(0, 160); failure = `stopped: budget exhausted (${retryOk.reason}); ${stage.title} failed: ${stage.outcome}`; status = 'failed'; break; }
           if (this.plan.adaptive && kind === 'coding' && stage.attempts <= lim.max_retries && this.escalations < lim.max_escalations && tier !== 'advanced') {
-            tier = TIER_ORDER[TIER_ORDER.indexOf(tier) + 1]; effort = 'high'; stage.escalation++; this.escalations++; this.retries++;
+            tier = TIER_ORDER[TIER_ORDER.indexOf(tier) + 1]; effort = raiseEffort(effort, 'high'); stage.escalation++; this.escalations++; this.retries++;
             this.strategy = this.strategy === 'direct' ? 'adaptive' : this.strategy;
             this.ctx.known_issues = [`previous attempt failed: ${(result.error ?? 'failed').slice(0, 160)}`];
             this.log({ level: 'warn', event: 'escalated', stage_id: stage.id, stage_type: stage.type, selected_model: this.select(stage, tier, effort).model, routing_reason: 'stage failed', escalation_level: stage.escalation, retry_count: stage.attempts });
@@ -306,16 +330,27 @@ export class StagedExecution {
         this.ctx.known_issues = this.ctx.known_issues.slice(-5);
         const problem = sig.testsFailed || (sig.stuck && ['task', 'implement', 'fix'].includes(stage.type));
         if (problem && this.plan.adaptive) {
-          // lazy stage: fix on the next tier up from where we are (de-escalation happens for later independent stages)
+          // lazy stage: the first fix moves one tier up; a later one first reasons deeper on the same model (keeps its
+          // prompt cache) and only changes model once reasoning cannot go higher
           const fixes = this.stages.filter((s) => s.type === 'fix').length;
-          const nextTier = TIER_ORDER[Math.min(TIER_ORDER.indexOf(tier) + 1, 2)];
-          if (fixes < lim.max_retries && this.escalations < lim.max_escalations && this.stages.length < lim.max_stages + lim.max_escalations) {
-            const fix = makeStage('fix', nextTier, 'high', sig.testsFailed ? 'tests still failing after previous stage' : 'previous stage reported it could not resolve the problem');
+          const deeper = fixes >= 1 && raiseEffort(this.prevEffort ?? effort, 'xhigh') !== (this.prevEffort ?? effort);
+          const nextTier = deeper ? tier : TIER_ORDER[Math.min(TIER_ORDER.indexOf(tier) + 1, 2)];
+          // a fix stage must be worth it: failing tests are a verified problem; "could not resolve" is less certain
+          const benefit: Benefit = sig.testsFailed ? 'high' : 'medium';
+          const room = this.deps.budget ? this.deps.budget.allow('stage', benefit) : { ok: true as const };
+          if (!room.ok) {
+            this.stopForBudget(room.reason, i + 1, [sig.testsFailed ? 'fix the failing tests' : 'resolve the reported problem']);
+            failure = `stopped: budget exhausted (${room.reason}); ${sig.failures[0] ?? 'problem unresolved'}`; status = 'failed';
+          } else if (fixes < lim.max_retries && this.escalations < lim.max_escalations && this.stages.length < lim.max_stages + lim.max_escalations) {
+            // reasoning one step above what failed (at least medium); a second fix may go beyond high
+            const fixEffort = raiseEffort(this.prevEffort ?? effort, fixes >= 1 ? 'xhigh' : 'high');
+            const fix = makeStage('fix', nextTier, fixEffort, sig.testsFailed ? 'tests still failing after previous stage' : 'previous stage reported it could not resolve the problem');
             fix.escalation = TIER_ORDER.indexOf(nextTier);
             this.escalations++;
             this.strategy = this.strategy === 'direct' ? 'adaptive' : this.strategy;
             this.stages.splice(i + 1, 0, fix);
-            this.log({ level: 'warn', event: 'escalated', stage_id: fix.id, stage_type: 'fix', selected_model: this.select(fix, nextTier, 'high').model, routing_reason: fix.reason, escalation_level: fix.escalation });
+            this.benefit.set(fix.id, benefit);
+            this.log({ level: 'warn', event: 'escalated', stage_id: fix.id, stage_type: 'fix', selected_model: this.select(fix, nextTier, fixEffort).model, reasoning_effort: fixEffort, routing_reason: fix.reason, escalation_level: fix.escalation });
           } else {
             this.log({ level: 'warn', event: 'escalation_limit_reached', stage_id: stage.id, stage_type: stage.type, routing_reason: 'problems remain' });
             failure = `${stage.title}: ${sig.failures[0] ?? 'problem unresolved'}`; status = 'failed';
@@ -337,13 +372,26 @@ export class StagedExecution {
       }
     }
     for (const s of this.stages) if (s.status === 'pending') s.status = 'skipped';
+    if (this.deps.budget) { this.deps.budget.escalations = this.escalations; this.deps.budget.switches = this.switches; }
     const result: ExecutionResult = {
       status, error: failure, stages: this.stages, strategy: this.strategy, switches: this.switches, escalations: this.escalations,
       compactions: this.compactions, retries: this.retries, usage, usageReported, ms: Date.now() - t0,
       models: [...new Set(this.stages.map((s) => s.model).filter((m): m is string => Boolean(m)))],
+      ...(this.deps.budget?.stopped ? { stopped: this.deps.budget.stopped } : {}),
     };
     this.log({ level: status === 'completed' ? 'info' : 'warn', event: 'execution_finished', status, stages: this.stages.filter((s) => s.status !== 'skipped').length, models: result.models.join(','), escalation_level: this.escalations, compactions: this.compactions, retry_count: this.retries, execution_duration_ms: result.ms, token_source: usageReported ? 'provider' : 'unavailable', ...(usageReported ? flat(usage) : {}) });
     return result;
+  }
+
+  /** Expected benefit of lazily added stages (fix stages after verified failures are "high"). */
+  private benefit = new Map<string, Benefit>();
+
+  /** Budget exhausted at a boundary: remaining stages are left undone and reported, never marked done. */
+  private stopForBudget(reason: string, from: number, extra: string[] = []): void {
+    const unfinished = [...extra, ...this.stages.slice(from).filter((s) => s.status === 'pending').map((s) => s.title)];
+    this.deps.budget?.stop(reason, unfinished.length ? unfinished : ['no remaining planned stages']);
+    this.log({ level: 'warn', event: 'budget_exhausted', routing_reason: reason, status: unfinished.join('; ') });
+    this.deps.hooks.notice(`budget exhausted: ${reason} — stopping here`);
   }
 
   private withTimeout(p: Promise<TurnResult>, ms: number): Promise<TurnResult> {

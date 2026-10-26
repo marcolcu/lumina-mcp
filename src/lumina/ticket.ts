@@ -1,4 +1,6 @@
-import { splitPrompt } from '../smart-codex/router.js';
+import type { RouterConfig } from '../smart-codex/config.js';
+import { ModelInfo, resolveModel } from '../smart-codex/models.js';
+import { Route, splitPrompt } from '../smart-codex/router.js';
 
 export type TicketIntent = 'understand' | 'implement' | 'clarify' | 'confirm';
 export type TicketMode = 'understanding' | 'ready' | 'implementing' | 'done';
@@ -127,4 +129,12 @@ export class TicketSession {
     if (this.mode === 'understanding' || this.mode === 'ready') { if (answer.trim()) this.summary = answer.replace(/\s+/g, ' ').trim().slice(0, 1500); }
     else if (this.mode === 'implementing' && ok) this.mode = 'done';
   }
+}
+
+/** Understanding/clarifying a ticket is light, read-only work: the efficient model unless the request itself is complex. */
+export function readingSelection(route: Route, text: string, ticket: Pick<TicketSession, 'ticket' | 'fetched'>, catalog: ModelInfo[], cfg: RouterConfig): { model: string; effort: string } {
+  const tier = route.base_complexity >= 7 ? 'balanced' : 'fast';
+  const effort = tier === 'balanced' || splitPrompt(text).reference.length > 2000 || (ticket.ticket?.source !== 'pasted' && !ticket.fetched) ? 'medium' : 'low';
+  const r = resolveModel(catalog, cfg.stages.tiers[tier], effort, false, cfg.stages.tiers.fast);
+  return { model: r.model, effort: r.effort };
 }

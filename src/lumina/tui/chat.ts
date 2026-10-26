@@ -11,7 +11,7 @@ export const DEFAULT_POLICY: Policy = { approvalPolicy: 'on-request', sandbox: '
 export interface Selection { model?: string; effort?: string; }
 export interface ThreadSummary { id: string; preview: string; }
 /** What a finished turn did, kept small: enough to hand off context and detect failures, no file contents. */
-export interface TurnItem { type: string; status?: string; exitCode?: number | null; command?: string; files?: string[]; text?: string; tool?: string }
+export interface TurnItem { type: string; status?: string; exitCode?: number | null; command?: string; files?: string[]; text?: string; tool?: string; /** Files Codex reported reading (commandActions of type read). */ reads?: string[]; /** commandActions types, cwd and duration of a command. */ actions?: string[]; cwd?: string; durationMs?: number }
 /** `usage` is the provider-reported usage of this turn alone (difference of the thread's cumulative counters). */
 export interface TurnResult { status: 'completed' | 'interrupted' | 'failed'; error?: string; items?: TurnItem[]; usage?: TokenBreakdown }
 
@@ -105,6 +105,17 @@ export class Chat {
     return res.data.map((t) => ({ id: t.id, preview: (t.name || t.preview || '').replace(/\s+/g, ' ').slice(0, 60) }));
   }
 
+  /** One page of saved conversations for this cwd, newest activity first (metadata only, no turns). */
+  async listPage(opts: { limit?: number; cursor?: string | null } = {}): Promise<{ items: { id: string; title: string; updatedAt: number }[]; nextCursor: string | null }> {
+    const res = await this.client.request<{ data: { id: string; preview?: string; name?: string | null; updatedAt?: number }[]; nextCursor?: string | null }>('thread/list', {
+      cwd: this.opts.cwd, limit: opts.limit ?? 50, sortKey: 'updated_at', sortDirection: 'desc', ...(opts.cursor ? { cursor: opts.cursor } : {}),
+    });
+    return {
+      items: res.data.map((t) => ({ id: t.id, updatedAt: t.updatedAt ?? 0, title: (t.name || (t.preview ?? '').split('\n').find((l) => l.trim()) || '(untitled conversation)').replace(/\s+/g, ' ').trim().slice(0, 200) })),
+      nextCursor: res.nextCursor ?? null,
+    };
+  }
+
   /** Persisted turns of a thread (server-side read, no model call). Empty when unavailable. */
   async readTurns(id: string): Promise<import('./history.js').HistoryTurn[]> {
     const res = await this.client.request<{ thread?: { turns?: import('./history.js').HistoryTurn[] } }>('thread/read', { threadId: id, includeTurns: true });
@@ -143,16 +154,27 @@ export class Chat {
   }
 
   /** Asks Codex to compact the main thread and waits for `thread/compacted` (bounded). Returns false when it did not happen. */
+  /** Provider-reported usage of the last compaction, when Codex reported any (undefined = not reported). */
+  lastCompactionUsage?: TokenBreakdown;
+
   async compact(timeoutMs = 120000): Promise<boolean> {
     const id = this.threadId;
     if (!id || this.busy) return false;
     this.busy = true;
     let off: (() => void) | undefined;
     try {
+      this.lastCompactionUsage = undefined;
+      const before = this.totals.get(id);
       const done = new Promise<boolean>((resolve) => {
         const t = setTimeout(() => resolve(false), timeoutMs);
         t.unref?.();
-        off = this.client.onNotification((m, p) => { if (m === 'thread/compacted' && (p as { threadId?: string }).threadId === id) { clearTimeout(t); resolve(true); } });
+        off = this.client.onNotification((m, p) => {
+          const q = p as { threadId?: string; tokenUsage?: import('../usage.js').SessionUsage };
+          if (q?.threadId !== id) return;
+          // the compaction's own cost, only if Codex reports usage for it
+          if (m === 'thread/tokenUsage/updated' && q.tokenUsage) { const total = q.tokenUsage.total as TokenBreakdown; this.lastCompactionUsage = diffUsage(total, before); this.totals.set(id, total); this.usage = q.tokenUsage; }
+          if (m === 'thread/compacted') { clearTimeout(t); resolve(true); }
+        });
       });
       await this.client.request('thread/compact/start', { threadId: id });
       return await done;
@@ -184,7 +206,7 @@ export class Chat {
         const items: TurnItem[] = [];
         this.client.onClose((e) => resolve({ status: 'failed', error: e.message }));
         off = this.client.onNotification((method, params) => {
-          const p = params as { item?: { type: string; status?: string; exitCode?: number | null; command?: string; changes?: { path?: string }[]; text?: string; tool?: string }; threadId?: string; delta?: string; error?: { message?: string }; willRetry?: boolean; turn?: { id?: string; status: TurnResult['status']; error?: { message?: string } | null } };
+          const p = params as { item?: { type: string; status?: string; exitCode?: number | null; command?: string; changes?: { path?: string }[]; text?: string; tool?: string; commandActions?: { type: string; path?: string | null }[]; cwd?: string; durationMs?: number | null }; threadId?: string; delta?: string; error?: { message?: string }; willRetry?: boolean; turn?: { id?: string; status: TurnResult['status']; error?: { message?: string } | null } };
           if (p?.threadId !== threadId) return;
           this.opts.onEvent?.(method, params);
           if (method === 'item/agentMessage/delta' && p.delta) this.opts.onDelta(p.delta);
@@ -198,7 +220,7 @@ export class Chat {
           else if (method === 'turn/started' && p.turn?.id) this.turnId = p.turn.id;
           else if (method === 'item/completed' && p.item) {
             const it = p.item;
-            items.push({ type: it.type, status: it.status, exitCode: it.exitCode, command: it.command?.slice(0, 300), files: it.changes?.map((c) => c.path ?? '').filter(Boolean), text: it.type === 'agentMessage' ? it.text?.slice(-2000) : undefined, tool: it.tool });
+            items.push({ type: it.type, status: it.status, exitCode: it.exitCode, command: it.command?.slice(0, 300), files: it.changes?.map((c) => c.path ?? '').filter(Boolean), text: it.type === 'agentMessage' ? it.text?.slice(-2000) : undefined, tool: it.tool, ...(it.type === 'commandExecution' ? { actions: (it.commandActions ?? []).map((a) => a.type), cwd: it.cwd, durationMs: it.durationMs ?? undefined } : {}), ...(it.commandActions?.some((a) => a.type === 'read' && a.path) ? { reads: it.commandActions.filter((a) => a.type === 'read' && a.path).map((a) => a.path!) } : {}) });
           }
           else if (method === 'turn/completed' && p.turn) resolve({ status: p.turn.status, error: p.turn.error?.message ?? lastError, items, usage: total ? diffUsage(total, before) : undefined });
         });

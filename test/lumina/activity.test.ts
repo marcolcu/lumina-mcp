@@ -31,11 +31,11 @@ describe('spinner', () => {
   it('starts immediately, animates with elapsed time, and stops on success with one completion line', () => {
     const a = mk();
     a.begin('Thinking...');
-    expect(snap()).toContain('◐ Thinking... (0s)');
+    expect(snap()).toContain('◐ Thinking... 0s');
     const seen = new Set<string>();
     for (let i = 0; i < 24; i++) { vi.advanceTimersByTime(100); seen.add(snap().match(/[◐◓◑◒] Thinking/g)?.at(-1)?.[0] ?? ''); }
     for (const f of ['◐', '◓', '◑', '◒']) expect(seen).toContain(f);
-    expect(snap()).toContain('(2s)');
+    expect(snap()).toContain('Thinking... 2s');
     expect(vi.getTimerCount()).toBe(1);
     vi.advanceTimersByTime(1600);
     a.end('completed');
@@ -99,7 +99,7 @@ describe('streaming', () => {
     const t = snap();
     const lines = t.split('\n');
     expect(lines).toContain('  partial answer done');
-    expect(lines.indexOf('  partial answer done')).toBeLessThan(lines.lastIndexOf('  ◐ Thinking... (0s)'));
+    expect(lines.indexOf('  partial answer done')).toBeLessThan(lines.lastIndexOf('  ◐ Thinking... 0s'));
     a.end('completed');
   });
   it('a new activity after mid-line text starts on its own row', () => {
@@ -188,8 +188,92 @@ describe('notices (auto-approval feedback)', () => {
     const lines = snap().split('\n');
     expect(lines).toContain('  partial');
     expect(lines).toContain('  ✓ Auto-approved: go test ./...');
-    const spin = lines.findIndex((l) => /Running command\.\.\. \(0s\)/.test(l));
+    const spin = lines.findIndex((l) => /Running command\.\.\. 0s/.test(l));
     expect(spin).toBeGreaterThan(lines.indexOf('  ✓ Auto-approved: go test ./...'));
+    a.end('completed');
+  });
+});
+
+describe('execution states with details (from events only)', () => {
+  const mkCwd = (animate = true) => {
+    screen = new Screen(out, { live: true, color: false });
+    return new Activity(screen, { animate, color: false, cwd: '/repo' });
+  };
+  it('model-side states show the routed model; tool states show the command / files / tool instead', () => {
+    const a = mkCwd();
+    a.model = 'Model: GPT-6 Luna · Reasoning: Medium';
+    a.begin('Preparing...');
+    expect(snap()).toMatch(/◐ Preparing\.\.\. 0s/);
+    expect(snap()).not.toContain('Model:'); // not working on the model yet
+    a.event('turn/started', {});
+    expect(snap()).toMatch(/Thinking\.\.\. 0s\n {4}Model: GPT-6 Luna · Reasoning: Medium/);
+    started(a, cmd('t', ['unknown'], { command: "/bin/zsh -lc 'npm test'" }));
+    expect(snap()).toMatch(/Running tests\.\.\. 0s\n {4}npm test\n/);
+    a.event('item/completed', { item: { type: 'commandExecution', id: 't', commandActions: [{ type: 'unknown' }], status: 'completed', exitCode: 1, command: 'npm test' } });
+    expect(snap()).toMatch(/Thinking\.\.\. 0s\n {4}Model: GPT-6 Luna/);
+    started(a, { item: { type: 'fileChange', id: 'f', changes: [{ path: '/repo/src/auth/service.ts' }, { path: '/repo/src/auth/x.ts' }] } });
+    expect(snap()).toMatch(/Editing files\.\.\. 0s\n {4}src\/auth\/service\.ts \(\+1 more\)/);
+    done(a, { item: { type: 'fileChange', id: 'f', changes: [{}, {}] } });
+    started(a, { item: { type: 'mcpToolCall', id: 'm', server: 'lumina-mcp', tool: 'get_jira_ticket' } });
+    expect(snap()).toMatch(/Calling tool\.\.\. 0s\n {4}lumina-mcp › get_jira_ticket/);
+    done(a, { item: { type: 'mcpToolCall', id: 'm' } });
+    a.end('completed');
+    const t = strip(text);
+    expect(t).toContain('✗ Tests failed (exit 1)');
+    expect(t).toContain('✓ Edited 2 files');
+    expect(snap()).not.toMatch(/Model:|npm test\n.*\n?─/); // status rows gone after the turn
+  });
+  it('approval stops the animation at once and shows a static waiting row; resume restarts it', () => {
+    const a = mkCwd();
+    a.begin('Running command...');
+    a.pause();
+    expect(vi.getTimerCount()).toBe(0);
+    expect(snap()).toContain('! Waiting for approval · 0s');
+    expect(snap()).not.toMatch(/[◐◓◑◒]/);
+    a.resume();
+    expect(vi.getTimerCount()).toBe(1);
+    expect(snap()).toMatch(/[◐◓◑◒] Running command\.\.\./);
+    a.pause();
+    a.end('cancelled');
+    expect(vi.getTimerCount()).toBe(0);
+    expect(snap()).not.toContain('Waiting for approval');
+  });
+  it('reduced motion: static ●, repainted only when the clock changes (no idle redraws)', () => {
+    const a = mkCwd(false);
+    a.begin('Thinking...');
+    expect(snap()).toContain('● Thinking... 0s');
+    const len = text.length;
+    vi.advanceTimersByTime(900);
+    screen.flush();
+    expect(text.length).toBe(len); // same content: nothing written
+    vi.advanceTimersByTime(200);
+    expect(snap()).toContain('● Thinking... 1s');
+    a.setLabel('Thinking...'); // same state again: no repaint
+    const len2 = text.length;
+    screen.flush();
+    expect(text.length).toBe(len2);
+    a.end('failed', 'boom');
+    expect(vi.getTimerCount()).toBe(0);
+    expect(snap()).toContain('✗ Failed after 1s');
+  });
+  it('streamed chunks are written once, split anywhere (even mid-word and mid-line)', () => {
+    const a = mkCwd();
+    a.begin('Thinking...');
+    for (const c of ['Hel', 'lo wo', 'rld\nsec', 'ond line', '\n']) a.text(c);
+    a.end('completed');
+    const t = snap();
+    expect(t.match(/Hello world/g)).toHaveLength(1);
+    expect(t.match(/second line/g)).toHaveLength(1);
+  });
+  it('resize re-fits both status rows to the new width', () => {
+    const a = mkCwd();
+    a.begin('Running tests...');
+    started(a, cmd('t', ['unknown'], { command: `npm test -- ${'x'.repeat(80)}` }));
+    out.columns = 30;
+    a.refresh();
+    const rows = snap().split('\n').filter((l) => /Running tests|npm test/.test(l)).slice(-2);
+    expect(rows).toHaveLength(2);
+    for (const r of rows) expect(r.length).toBeLessThanOrEqual(29);
     a.end('completed');
   });
 });

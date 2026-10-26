@@ -2,6 +2,7 @@ import { RouterConfig } from '../../smart-codex/config.js';
 import { ModelInfo, loadCatalog, resolveModel } from '../../smart-codex/models.js';
 import { Route, route } from '../../smart-codex/router.js';
 import { Selection } from './chat.js';
+import type { RoutingFeedback } from '../feedback.js';
 
 export interface Pick { sel: Selection; route: Route; sticky: boolean; }
 
@@ -13,6 +14,8 @@ export class TurnRouter {
   model?: string;
   reasoning?: string;
   private last?: Selection;
+  /** Historical outcomes; consulted only for automatic routes (never over /model or /reasoning). */
+  feedback?: RoutingFeedback;
 
   constructor(private readonly cfg: RouterConfig, private readonly cwd: string, private readonly catalog: ModelInfo[] = loadCatalog()) {}
 
@@ -41,7 +44,12 @@ export class TurnRouter {
   configuredModels(): string[] { return [...new Set(Object.values(this.cfg.models))]; }
 
   pick(task: string): Pick {
-    const r = route({ task, repository: this.cwd, preferences: { model: this.model, reasoning: this.reasoning } }, this.cfg, this.catalog);
+    let r = route({ task, repository: this.cwd, preferences: { model: this.model, reasoning: this.reasoning } }, this.cfg, this.catalog);
+    if (!this.model && !this.reasoning && this.feedback) {
+      let adv;
+      try { adv = this.feedback.advise(r, this.cfg.models, this.catalog); } catch { adv = undefined; } // history problems never block routing
+      if (adv) r = { ...r, model: adv.model, reasoning_effort: adv.effort, feedback: { change: adv.change, evidence: adv.evidence }, reason: `${r.reason}; history: ${adv.change}` };
+    }
     const vague = r.confidence < 0.5 && this.last !== undefined && !this.model && !this.reasoning;
     const sel: Selection = vague ? this.last! : { model: r.model, effort: r.reasoning_effort };
     this.last = sel;
